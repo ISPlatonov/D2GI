@@ -10,6 +10,7 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 
 
 enum SURFACETYPE
@@ -34,6 +35,7 @@ protected:
 	std::unique_ptr<std::byte[]> m_intermediateBuffer; // For 8bpp palettized and color keyed surfaces
 	std::optional<uint32_t> m_sColorKey;
 	bool m_bSurfaceDirty = false;
+	std::string m_strDebugName;
 
 public:
 	D2GISurface(D2GI*, uint32_t dwW, uint32_t dwH, D2GIPIXELFORMAT);
@@ -49,6 +51,8 @@ public:
 	DWORD GetHeight() const { return m_dwHeight; }
 	DWORD GetBPP() const { return m_dwBPP; }
 	D2GIPIXELFORMAT GetD2GIPixelFormat() const { return m_eD2GIPixelFormat; }
+	void SetDebugName(const char* pszName) { m_strDebugName = pszName != nullptr ? pszName : ""; }
+	const std::string& GetDebugName() const { return m_strDebugName; }
 
 	bool HasColorKeyConversion() const { return m_sColorKey.has_value() && m_eD2GIPixelFormat == D2GIPF_16_565; }
 	uint32_t GetOriginalColorKeyValue() const { return m_sColorKey.value(); }

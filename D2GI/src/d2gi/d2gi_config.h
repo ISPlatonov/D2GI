@@ -35,6 +35,7 @@ class D2GIConfig
 	static bool       s_bFixAlpha;
 	static wchar_t    s_cScreenshotsPath[MAX_PATH];
 	static IMG_FORMAT s_eImgFormat;
+	static bool       s_bRemixDebugDraws;
 public:
 	static HookOptions ReadFromFile();
 
@@ -47,6 +48,7 @@ public:
 	static bool FixAlphaEnabled() { return s_bFixAlpha; }
 	static wchar_t* GetScreenshotsPath() { return s_cScreenshotsPath; }
 	static IMG_FORMAT GetScreenshotsFormat() { return s_eImgFormat; }
+	static bool RemixDebugDrawsEnabled() { return s_bRemixDebugDraws; }
 
 	static std::basic_string<TCHAR> GetConfigFilePath();
 };

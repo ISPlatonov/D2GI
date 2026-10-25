@@ -7,6 +7,7 @@
 #include "d2gi_hooks.h"
 #include "d2gi_config.h"
 #include "d2gi_game_classes.h"
+#include "d2gi_surface.h"
 
 #include "Utils/HookEach.hpp"
 #include "Utils/MemoryMgr.h"
@@ -816,9 +817,11 @@ namespace TextureUVFixes
 
 
 // ======= Texture names injection =======
+// Debug builds: names go to D3D9 private data (for graphics debuggers).
+// Any build with [REMIX] DebugDraws=1: names are stored on the D2GI surface for draw logging.
 #ifdef _DEBUG
-
 #pragma comment(lib, "dxguid.lib")
+#endif
 
 namespace TextureNames
 {
@@ -831,8 +834,11 @@ namespace TextureNames
 
 		if (texName != nullptr && d2giSurface != nullptr)
 		{
+			d2giSurface->SetDebugName(texName);
+#ifdef _DEBUG
 			const size_t texNameLen = std::strlen(texName);
 			d2giSurface->SetPrivateData(WKPDID_D3DDebugObjectName, const_cast<char*>(texName), texNameLen, 0);
+#endif
 		}
 	}
 
@@ -849,7 +855,6 @@ namespace TextureNames
 
 	HOOK_EACH_INIT(SetName, orgTextureInit, TextureInit_SetName);
 }
-#endif
 
 // ======= Undo patch 8.2's single core affinity changes =======
 namespace AffinityChanges
@@ -1382,8 +1387,11 @@ void D2GIHookInjector::InjectHooks(const HookOptions& options)
 	}
 
 	// Texture names injection
+	bool bWantTextureNames = D2GIConfig::RemixDebugDrawsEnabled();
 #ifdef _DEBUG
-	if (bHasTextureFacade) try {
+	bWantTextureNames = true;
+#endif
+	if (bHasTextureFacade && bWantTextureNames) try {
 		using namespace TextureNames;
 
 		std::array<void*, 3> texture_init = {
@@ -1397,5 +1405,4 @@ void D2GIHookInjector::InjectHooks(const HookOptions& options)
 	} catch (const hook::txn_exception&) {
 		Logger::Log(TEXT("Failed to apply texture names injection"));
 	}
-#endif
 }

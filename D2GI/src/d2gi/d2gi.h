@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstdio>
 #include <optional>
+#include <string>
+#include <unordered_set>
 #include <utility>
 
 #define NOMINMAX
@@ -75,6 +78,16 @@ class D2GI
 	} anisotropy_state_;
 
 	uint32_t max_primitive_count_ = 0;
+
+	// [REMIX] DebugDraws=1: log every unique draw "signature" to d2gi_remix.log
+	DWORD m_dbgStageState[2][32] = {};
+	bool  m_dbgTexXformSet[2] = {};
+	FLOAT m_dbgTexXform[2][16] = {};
+	FILE* m_pRemixLog = nullptr;
+	std::unordered_set<std::string> m_dbgSeenDraws;
+	uint32_t m_dbgDrawCounter = 0;
+	VOID RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
+		DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount);
 
 	VOID ResetD3D9Device();
 	void ReleaseResources(bool bResettingDevice);

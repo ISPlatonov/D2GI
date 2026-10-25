@@ -43,6 +43,14 @@ D2GI::D2GI()
 
 	ZeroMemory(m_lpCurrentTextures, sizeof(m_lpCurrentTextures));
 
+	// Direct3D default texture stage states (for draw logging)
+	m_dbgStageState[0][D3D7::D3DTSS_COLOROP] = D3D7::D3DTOP_MODULATE;
+	m_dbgStageState[1][D3D7::D3DTSS_COLOROP] = D3D7::D3DTOP_DISABLE;
+	m_dbgStageState[0][D3D7::D3DTSS_ALPHAOP] = D3D7::D3DTOP_SELECTARG1;
+	m_dbgStageState[1][D3D7::D3DTSS_ALPHAOP] = D3D7::D3DTOP_DISABLE;
+	m_dbgStageState[0][D3D7::D3DTSS_TEXCOORDINDEX] = 0;
+	m_dbgStageState[1][D3D7::D3DTSS_TEXCOORDINDEX] = 1;
+
 	m_pDirectDrawProxy = new D2GIDirectDraw(this);
 }
 
@@ -570,6 +578,9 @@ VOID D2GI::OnRenderStateSet(D3D7::D3DRENDERSTATETYPE eState, DWORD dwValue)
 
 VOID D2GI::OnTextureStageSet(DWORD i, D3D7::D3DTEXTURESTAGESTATETYPE eState, DWORD dwValue)
 {
+	if (i < 2 && (DWORD)eState < 32)
+		m_dbgStageState[i][eState] = dwValue;
+
 	switch (eState)
 	{
 		case D3D7::D3DTSS_COLOROP:
@@ -743,6 +754,13 @@ BOOL D2GI::OnDeviceValidate(DWORD* pdw)
 
 VOID D2GI::OnTransformSet(D3D7::D3DTRANSFORMSTATETYPE eType, D3D7::D3DMATRIX* pMatrix)
 {
+	if (((DWORD)eType == 16 || (DWORD)eType == 17) && pMatrix != nullptr) // D3DTRANSFORMSTATE_TEXTURE0/1
+	{
+		const DWORD stage = (DWORD)eType - 16;
+		m_dbgTexXformSet[stage] = true;
+		CopyMemory(m_dbgTexXform[stage], pMatrix, sizeof(m_dbgTexXform[stage]));
+	}
+
 	switch (eType)
 	{
 		case D3D7::D3DTRANSFORMSTATE_WORLD:
@@ -889,6 +907,9 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 	DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags)
 {
 	m_eRenderState = RS_3D_RENDERING;
+
+	if (D2GIConfig::RemixDebugDrawsEnabled())
+		RemixDebugLogDraw(pt, dwFVF, bStrided, pVertexData, dwVertexCount, pIndexData, dwIndexCount);
 
 	DWORD        dwAlphaTestEnable, dwAlphaTestFunc, dwAlphaTestRef;
 	D2GITexture* pTexture = m_lpCurrentTextures[0];
@@ -1241,4 +1262,158 @@ void D2GI::BlitToBackbufferAndPresent(FRECT* backbuffer_rect, D3D9::IDirect3DTex
 	backbuffer->Release();
 
 	Present();
+}
+
+
+// ======= Remix diagnostics: log each unique draw signature once =======
+
+namespace
+{
+	struct UVRange
+	{
+		bool  valid = false;
+		float minU = 0, maxU = 0, minV = 0, maxV = 0;
+		float firstU = 0, firstV = 0;
+	};
+
+	UINT FVFPositionSize(DWORD dwFVF)
+	{
+		switch (dwFVF & 0x00E)
+		{
+			case 0x002: return 12; // XYZ
+			case 0x004: return 16; // XYZRHW
+			case 0x006: return 16; // XYZB1
+			case 0x008: return 20;
+			case 0x00A: return 24;
+			case 0x00C: return 28;
+			case 0x00E: return 32;
+		}
+		return 0;
+	}
+
+	UINT FVFTexCoordOffset(DWORD dwFVF, UINT uSet)
+	{
+		UINT uOffset = FVFPositionSize(dwFVF);
+		if (dwFVF & 0x010) uOffset += 12; // NORMAL
+		if (dwFVF & 0x020) uOffset += 4;  // RESERVED1 / PSIZE
+		if (dwFVF & 0x040) uOffset += 4;  // DIFFUSE
+		if (dwFVF & 0x080) uOffset += 4;  // SPECULAR
+		return uOffset + uSet * 8;        // assume 2D texcoords
+	}
+
+	UVRange ComputeUVRange(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD dwVertexCount, UINT uSet)
+	{
+		UVRange r;
+		const UINT uSetCount = (dwFVF & 0xF00) >> 8;
+		if (uSet >= uSetCount || pVertexData == nullptr || dwVertexCount == 0)
+			return r;
+
+		const BYTE* pBase;
+		UINT uStride;
+		if (bStrided)
+		{
+			auto* pData = static_cast<D3D7::D3DDRAWPRIMITIVESTRIDEDDATA*>(pVertexData);
+			pBase = static_cast<const BYTE*>(pData->textureCoords[uSet].lpvData);
+			uStride = pData->textureCoords[uSet].dwStride;
+		}
+		else
+		{
+			pBase = static_cast<const BYTE*>(pVertexData) + FVFTexCoordOffset(dwFVF, uSet);
+			uStride = (UINT)CalcFVFStride(dwFVF);
+		}
+		if (pBase == nullptr)
+			return r;
+
+		const DWORD dwCount = std::min<DWORD>(dwVertexCount, 4096);
+		for (DWORD i = 0; i < dwCount; i++)
+		{
+			const float* uv = reinterpret_cast<const float*>(pBase + i * uStride);
+			if (!r.valid)
+			{
+				r.valid = true;
+				r.minU = r.maxU = r.firstU = uv[0];
+				r.minV = r.maxV = r.firstV = uv[1];
+			}
+			r.minU = std::min(r.minU, uv[0]); r.maxU = std::max(r.maxU, uv[0]);
+			r.minV = std::min(r.minV, uv[1]); r.maxV = std::max(r.maxV, uv[1]);
+		}
+		return r;
+	}
+
+	std::string DescribeTexture(D2GITexture* pTex)
+	{
+		if (pTex == nullptr)
+			return "none";
+		char buf[200];
+		const std::string& name = pTex->GetDebugName();
+		sprintf_s(buf, "'%s' %ux%u pf%d", name.empty() ? "?" : name.c_str(),
+			(unsigned)pTex->GetWidth(), (unsigned)pTex->GetHeight(), (int)pTex->GetD2GIPixelFormat());
+		return buf;
+	}
+
+	std::string DescribeUV(const UVRange& r)
+	{
+		if (!r.valid)
+			return "-";
+		char buf[160];
+		sprintf_s(buf, "u[%.3f..%.3f] v[%.3f..%.3f] first(%.3f,%.3f)", r.minU, r.maxU, r.minV, r.maxV, r.firstU, r.firstV);
+		return buf;
+	}
+}
+
+
+VOID D2GI::RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
+	DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount)
+{
+	constexpr size_t MAX_UNIQUE_DRAWS = 4000;
+
+	m_dbgDrawCounter++;
+	if (m_dbgSeenDraws.size() >= MAX_UNIQUE_DRAWS)
+		return;
+
+	if (m_pRemixLog == nullptr)
+	{
+		TCHAR szPath[MAX_PATH];
+		PathCombine(szPath, Directory::GetEXEDirectory(), TEXT("d2gi_remix.log"));
+		m_pRemixLog = _tfopen(szPath, TEXT("w"));
+		if (m_pRemixLog == nullptr)
+			return;
+		fprintf(m_pRemixLog, "# D2GI Remix draw log. One line per unique draw signature.\n"
+			"# st=stage state: op=COLOROP a1/a2=COLORARG1/2 tci=TEXCOORDINDEX ttf=TEXTURETRANSFORMFLAGS (hex)\n");
+		fflush(m_pRemixLog);
+	}
+
+	const DWORD (&s)[2][32] = m_dbgStageState;
+	D2GITexture* pTex0 = m_lpCurrentTextures[0];
+	D2GITexture* pTex1 = m_lpCurrentTextures[1];
+	const std::string tex0 = DescribeTexture(pTex0);
+	const std::string tex1 = DescribeTexture(pTex1);
+
+	char szKey[1024];
+	sprintf_s(szKey, "pt%d fvf%03X %s%s | t0 %s op%X a%X/%X tci%X ttf%X | t1 %s op%X a%X/%X tci%X ttf%X",
+		(int)pt, (unsigned)dwFVF, bStrided ? "strided" : "up", pIndexData != nullptr ? "+idx" : "",
+		tex0.c_str(), s[0][D3D7::D3DTSS_COLOROP], s[0][D3D7::D3DTSS_COLORARG1], s[0][D3D7::D3DTSS_COLORARG2],
+		s[0][D3D7::D3DTSS_TEXCOORDINDEX], s[0][D3D7::D3DTSS_TEXTURETRANSFORMFLAGS],
+		tex1.c_str(), s[1][D3D7::D3DTSS_COLOROP], s[1][D3D7::D3DTSS_COLORARG1], s[1][D3D7::D3DTSS_COLORARG2],
+		s[1][D3D7::D3DTSS_TEXCOORDINDEX], s[1][D3D7::D3DTSS_TEXTURETRANSFORMFLAGS]);
+
+	if (!m_dbgSeenDraws.insert(szKey).second)
+		return;
+
+	const UVRange uv0 = ComputeUVRange(dwFVF, bStrided, pVertexData, dwVertexCount, 0);
+	const UVRange uv1 = ComputeUVRange(dwFVF, bStrided, pVertexData, dwVertexCount, 1);
+
+	fprintf(m_pRemixLog, "#%u draw%u verts%u idx%u %s\n    uv0 %s\n    uv1 %s\n",
+		(unsigned)m_dbgSeenDraws.size(), m_dbgDrawCounter, (unsigned)dwVertexCount, (unsigned)dwIndexCount, szKey,
+		DescribeUV(uv0).c_str(), DescribeUV(uv1).c_str());
+
+	for (int i = 0; i < 2; i++)
+	{
+		if (s[i][D3D7::D3DTSS_TEXTURETRANSFORMFLAGS] != 0 && m_dbgTexXformSet[i])
+		{
+			const FLOAT* m = m_dbgTexXform[i];
+			fprintf(m_pRemixLog, "    texmat%d [%.3f %.3f | %.3f %.3f | %.3f %.3f]\n", i, m[0], m[1], m[4], m[5], m[8], m[9]);
+		}
+	}
+	fflush(m_pRemixLog);
 }
