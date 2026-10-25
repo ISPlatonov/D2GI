@@ -1,0 +1,32 @@
+name: Build ddraw.dll
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Build Release x86
+        run: msbuild D2GI.sln /m /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v143
+
+      - name: Collect files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory out | Out-Null
+          Get-ChildItem -Recurse -Filter ddraw.dll | Where-Object { $_.FullName -match ‘Release’ } | Select-Object -First 1 | Copy-Item -Destination out
+          Copy-Item D2GI/d2gi.ini out
+          Get-ChildItem out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: D2GI-${{ github.sha }}
+          path: out/
