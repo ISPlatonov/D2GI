@@ -16,7 +16,7 @@ jobs:
       - uses: microsoft/setup-msbuild@v2
 
       - name: Build Release x86
-        run: msbuild D2GI.sln /m /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v143
+        run: msbuild D2GI.sln /m /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false
 
       - name: Collect files
         shell: pwsh
