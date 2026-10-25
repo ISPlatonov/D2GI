@@ -50,6 +50,13 @@ D2GI::D2GI()
 	m_dbgStageState[1][D3D7::D3DTSS_ALPHAOP] = D3D7::D3DTOP_DISABLE;
 	m_dbgStageState[0][D3D7::D3DTSS_TEXCOORDINDEX] = 0;
 	m_dbgStageState[1][D3D7::D3DTSS_TEXCOORDINDEX] = 1;
+	for (int i = 0; i < 2; i++)
+	{
+		m_dbgStageState[i][D3D7::D3DTSS_COLORARG1] = D3DTA_TEXTURE;
+		m_dbgStageState[i][D3D7::D3DTSS_COLORARG2] = D3DTA_CURRENT;
+		m_dbgStageState[i][D3D7::D3DTSS_ALPHAARG1] = D3DTA_TEXTURE;
+		m_dbgStageState[i][D3D7::D3DTSS_ALPHAARG2] = D3DTA_CURRENT;
+	}
 
 	m_pDirectDrawProxy = new D2GIDirectDraw(this);
 }
@@ -100,6 +107,7 @@ void D2GI::OnDrawBridgeLightingPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF,
 	// Not all those states were wrong previously, but let's not rely on the state of the previous effect that was drawn.
 	OnTextureSet(0, nullptr);
 	m_pDev->SetRenderState(D3D9::D3DRS_DIFFUSEMATERIALSOURCE, D3D9::D3DMCS_COLOR1);
+	m_dwDiffuseMaterialSource = D3D9::D3DMCS_COLOR1;
 	m_pDev->SetRenderState(D3D9::D3DRS_EMISSIVEMATERIALSOURCE, D3D9::D3DMCS_COLOR1);
 
 	m_pDev->SetRenderState(D3D9::D3DRS_FOGENABLE, TRUE);
@@ -154,6 +162,8 @@ VOID D2GI::ReleaseResources(bool bResettingDevice)
 
 	RELEASE(m_pBackBufferCopySurf);
 	RELEASE(m_pBackBufferCopy);
+
+	m_SolidColorTextures.clear();
 }
 
 
@@ -537,6 +547,7 @@ VOID D2GI::OnRenderStateSet(D3D7::D3DRENDERSTATETYPE eState, DWORD dwValue)
 			m_pDev->SetRenderState(D3D9::D3DRS_EMISSIVEMATERIALSOURCE, dwValue);
 			break;
 		case D3D7::D3DRENDERSTATE_DIFFUSEMATERIALSOURCE:
+			m_dwDiffuseMaterialSource = dwValue;
 			m_pDev->SetRenderState(D3D9::D3DRS_DIFFUSEMATERIALSOURCE, dwValue);
 			break;
 		case D3D7::D3DRENDERSTATE_ALPHATESTENABLE:
@@ -790,6 +801,9 @@ VOID D2GI::OnLightSet(DWORD i, D3D7::LPD3DLIGHT7 pLight)
 
 VOID D2GI::OnMaterialSet(D3D7::LPD3DMATERIAL7 pMaterial)
 {
+	if (pMaterial != nullptr)
+		m_CurrentMaterial = *pMaterial;
+
 	m_pDev->SetMaterial((D3D9::D3DMATERIAL9*)pMaterial);
 }
 
@@ -908,8 +922,12 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 {
 	m_eRenderState = RS_3D_RENDERING;
 
-	if (D2GIConfig::RemixDebugDrawsEnabled())
+	if (D2GIConfig::RemixDebugDrawsEnabled() && !m_bInUntexturedFix)
 		RemixDebugLogDraw(pt, dwFVF, bStrided, pVertexData, dwVertexCount, pIndexData, dwIndexCount);
+
+	if (D2GIConfig::RemixUntexturedColorsEnabled() && !m_bInUntexturedFix &&
+		DrawUntexturedWithColor(pt, dwFVF, bStrided, pVertexData, dwVertexCount, pIndexData, dwIndexCount, dwFlags))
+		return;
 
 	DWORD        dwAlphaTestEnable, dwAlphaTestFunc, dwAlphaTestRef;
 	D2GITexture* pTexture = m_lpCurrentTextures[0];
@@ -1407,6 +1425,36 @@ VOID D2GI::RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrid
 		(unsigned)m_dbgSeenDraws.size(), m_dbgDrawCounter, (unsigned)dwVertexCount, (unsigned)dwIndexCount, szKey,
 		DescribeUV(uv0).c_str(), DescribeUV(uv1).c_str());
 
+	{
+		// Position bounding box and material color, to find big flat surfaces like ground
+		const BYTE* pPos = nullptr;
+		UINT uPosStride = 0;
+		if (bStrided)
+		{
+			auto* pData = static_cast<D3D7::D3DDRAWPRIMITIVESTRIDEDDATA*>(pVertexData);
+			pPos = static_cast<const BYTE*>(pData->position.lpvData);
+			uPosStride = pData->position.dwStride;
+		}
+		else
+		{
+			pPos = static_cast<const BYTE*>(pVertexData);
+			uPosStride = (UINT)CalcFVFStride(dwFVF);
+		}
+		float mn[3] = { 1e30f, 1e30f, 1e30f }, mx[3] = { -1e30f, -1e30f, -1e30f };
+		if (pPos != nullptr)
+		{
+			const DWORD dwCount = std::min<DWORD>(dwVertexCount, 4096);
+			for (DWORD v = 0; v < dwCount; v++)
+			{
+				const float* p = reinterpret_cast<const float*>(pPos + v * uPosStride);
+				for (int k = 0; k < 3; k++) { mn[k] = std::min(mn[k], p[k]); mx[k] = std::max(mx[k], p[k]); }
+			}
+		}
+		const D3D7::D3DCOLORVALUE& d = m_CurrentMaterial.diffuse;
+		fprintf(m_pRemixLog, "    size %.1f x %.1f x %.1f  matDiffuse(%.2f %.2f %.2f %.2f) diffSrc%u\n",
+			mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2], d.r, d.g, d.b, d.a, (unsigned)m_dwDiffuseMaterialSource);
+	}
+
 	for (int i = 0; i < 2; i++)
 	{
 		if (s[i][D3D7::D3DTSS_TEXTURETRANSFORMFLAGS] != 0 && m_dbgTexXformSet[i])
@@ -1416,4 +1464,179 @@ VOID D2GI::RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrid
 		}
 	}
 	fflush(m_pRemixLog);
+}
+
+
+// ======= Remix: give untextured geometry a solid color texture =======
+
+D3D9::IDirect3DTexture9* D2GI::GetSolidColorTexture(DWORD dwColor)
+{
+	auto it = m_SolidColorTextures.find(dwColor);
+	if (it != m_SolidColorTextures.end())
+		return it->second.Get();
+
+	Microsoft::WRL::ComPtr<D3D9::IDirect3DTexture9> pTex;
+	if (FAILED(m_pDev->CreateTexture(1, 1, 1, 0, D3D9::D3DFMT_A8R8G8B8, D3D9::D3DPOOL_MANAGED, pTex.GetAddressOf(), nullptr)))
+		return nullptr;
+
+	D3D9::D3DLOCKED_RECT lr;
+	if (FAILED(pTex->LockRect(0, &lr, nullptr, 0)))
+		return nullptr;
+	*static_cast<DWORD*>(lr.pBits) = dwColor;
+	pTex->UnlockRect(0);
+
+	if (D2GIConfig::RemixDebugDrawsEnabled())
+		Logger::Log(TEXT("Remix: created solid color texture 0x%08X"), dwColor);
+
+	m_SolidColorTextures.emplace(dwColor, pTex);
+	return pTex.Get();
+}
+
+
+namespace
+{
+	DWORD ColorValueToARGB(const D3D7::D3DCOLORVALUE& c)
+	{
+		auto ToByte = [](float f) -> DWORD { return (DWORD)(std::clamp(f, 0.0f, 1.0f) * 255.0f + 0.5f); };
+		return (ToByte(c.a) << 24) | (ToByte(c.r) << 16) | (ToByte(c.g) << 8) | ToByte(c.b);
+	}
+
+	// Offset of the DIFFUSE color inside a non-strided FVF vertex
+	UINT FVFDiffuseOffset(DWORD dwFVF)
+	{
+		UINT uOffset;
+		switch (dwFVF & 0x00E)
+		{
+			case 0x004: uOffset = 16; break;
+			case 0x006: uOffset = 16; break;
+			case 0x008: uOffset = 20; break;
+			case 0x00A: uOffset = 24; break;
+			case 0x00C: uOffset = 28; break;
+			case 0x00E: uOffset = 32; break;
+			default:    uOffset = 12; break;
+		}
+		if (dwFVF & 0x010) uOffset += 12; // NORMAL
+		if (dwFVF & 0x020) uOffset += 4;  // PSIZE
+		return uOffset;
+	}
+
+	// Average vertex color, quantized a little so near-identical colors share one texture
+	DWORD AverageVertexColor(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD dwVertexCount)
+	{
+		const BYTE* pBase;
+		UINT uStride;
+		if (bStrided)
+		{
+			auto* pData = static_cast<D3D7::D3DDRAWPRIMITIVESTRIDEDDATA*>(pVertexData);
+			pBase = static_cast<const BYTE*>(pData->diffuse.lpvData);
+			uStride = pData->diffuse.dwStride;
+		}
+		else
+		{
+			pBase = static_cast<const BYTE*>(pVertexData) + FVFDiffuseOffset(dwFVF);
+			uStride = (UINT)CalcFVFStride(dwFVF);
+		}
+		if (pBase == nullptr || dwVertexCount == 0)
+			return 0xFFFFFFFF;
+
+		uint64_t sum[4] = {};
+		for (DWORD i = 0; i < dwVertexCount; i++)
+		{
+			const DWORD c = *reinterpret_cast<const DWORD*>(pBase + i * uStride);
+			for (int k = 0; k < 4; k++)
+				sum[k] += (c >> (k * 8)) & 0xFF;
+		}
+		DWORD dwResult = 0;
+		for (int k = 0; k < 4; k++)
+		{
+			DWORD v = (DWORD)(sum[k] / dwVertexCount) & 0xF8; // 5 bits per channel
+			dwResult |= v << (k * 8);
+		}
+		return dwResult;
+	}
+}
+
+
+BOOL D2GI::DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
+	DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags)
+{
+	const bool bScreenSpace = (dwFVF & 0x00E) == 0x004; // XYZRHW: 2D/UI, leave alone
+	const bool bUntextured = m_lpCurrentTextures[0] == nullptr ||
+		m_dbgStageState[0][D3D7::D3DTSS_COLOROP] == D3D7::D3DTOP_DISABLE;
+	if (bScreenSpace || !bUntextured || pVertexData == nullptr || dwVertexCount == 0)
+		return FALSE;
+
+	const UINT uTexCount = (dwFVF & 0xF00) >> 8;
+	// Pick the color the fixed-function pipeline would have used as diffuse
+	DWORD dwColor;
+	if ((dwFVF & 0x040) && m_dwDiffuseMaterialSource == D3D9::D3DMCS_COLOR1)
+		dwColor = AverageVertexColor(dwFVF, bStrided, pVertexData, dwVertexCount);
+	else
+		dwColor = ColorValueToARGB(m_CurrentMaterial.diffuse) & 0xF8F8F8F8;
+	dwColor |= 0xFF000000; // opaque; transparency still comes from blend states
+
+	D3D9::IDirect3DTexture9* pSolid = GetSolidColorTexture(dwColor);
+	if (pSolid == nullptr)
+		return FALSE;
+
+	// Geometry without texture coordinates gets (0,0) for every vertex
+	static const FLOAT s_ZeroUV[2] = { 0.0f, 0.0f };
+	D3D7::D3DDRAWPRIMITIVESTRIDEDDATA stridedCopy;
+	VOID* pDrawData = pVertexData;
+	DWORD dwDrawFVF = dwFVF;
+
+	if (uTexCount == 0)
+	{
+		dwDrawFVF = (dwFVF & ~0xF00) | 0x100; // TEX1
+		if (bStrided)
+		{
+			stridedCopy = *static_cast<D3D7::D3DDRAWPRIMITIVESTRIDEDDATA*>(pVertexData);
+			stridedCopy.textureCoords[0].lpvData = const_cast<FLOAT*>(s_ZeroUV);
+			stridedCopy.textureCoords[0].dwStride = 0;
+			pDrawData = &stridedCopy;
+		}
+		else
+		{
+			const UINT uOldStride = (UINT)CalcFVFStride(dwFVF);
+			const UINT uNewStride = uOldStride + 8;
+			m_UntexturedVertexScratch.resize((size_t)uNewStride * dwVertexCount);
+			BYTE* pDst = m_UntexturedVertexScratch.data();
+			const BYTE* pSrc = static_cast<const BYTE*>(pVertexData);
+			for (DWORD i = 0; i < dwVertexCount; i++)
+			{
+				CopyMemory(pDst + i * uNewStride, pSrc + i * uOldStride, uOldStride);
+				CopyMemory(pDst + i * uNewStride + uOldStride, s_ZeroUV, 8);
+			}
+			pDrawData = pDst;
+		}
+	}
+
+	const DWORD (&s)[2][32] = m_dbgStageState;
+	m_pDev->SetTexture(0, pSolid);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLOROP, D3D9::D3DTOP_SELECTARG1);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG1, D3DTA_TEXTURE);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAOP, D3D9::D3DTOP_SELECTARG1);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_TEXCOORDINDEX, 0);
+	m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLOROP, D3D9::D3DTOP_DISABLE);
+	m_pDev->SetTextureStageState(1, D3D9::D3DTSS_ALPHAOP, D3D9::D3DTOP_DISABLE);
+
+	m_bInUntexturedFix = true;
+	D2GITexture* pSavedTex0 = m_lpCurrentTextures[0];
+	m_lpCurrentTextures[0] = nullptr; // no color key emulation for the solid texture
+	DrawPrimitive(pt, dwDrawFVF, bStrided, pDrawData, dwVertexCount, pIndexData, dwIndexCount, dwFlags);
+	m_lpCurrentTextures[0] = pSavedTex0;
+	m_bInUntexturedFix = false;
+
+	// Restore what the game had set
+	m_pDev->SetTexture(0, pSavedTex0 != nullptr ? pSavedTex0->GetD3D9Texture() : nullptr);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLOROP, s[0][D3D7::D3DTSS_COLOROP]);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG1, s[0][D3D7::D3DTSS_COLORARG1]);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAOP, s[0][D3D7::D3DTSS_ALPHAOP]);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAARG1, s[0][D3D7::D3DTSS_ALPHAARG1]);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_TEXCOORDINDEX, s[0][D3D7::D3DTSS_TEXCOORDINDEX]);
+	m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLOROP, s[1][D3D7::D3DTSS_COLOROP]);
+	m_pDev->SetTextureStageState(1, D3D9::D3DTSS_ALPHAOP, s[1][D3D7::D3DTSS_ALPHAOP]);
+
+	return TRUE;
 }

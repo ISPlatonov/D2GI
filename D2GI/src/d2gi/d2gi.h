@@ -3,7 +3,9 @@
 #include <cstdio>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
+#include <vector>
 #include <utility>
 
 #define NOMINMAX
@@ -86,6 +88,17 @@ class D2GI
 	FILE* m_pRemixLog = nullptr;
 	std::unordered_set<std::string> m_dbgSeenDraws;
 	uint32_t m_dbgDrawCounter = 0;
+
+	// [REMIX] UntexturedColors=1: untextured draws get a 1x1 texture in their color,
+	// because Remix renders geometry without an albedo texture as plain white.
+	D3D7::D3DMATERIAL7 m_CurrentMaterial = {};
+	DWORD m_dwDiffuseMaterialSource = 1; // D3DMCS_COLOR1
+	bool  m_bInUntexturedFix = false;
+	std::unordered_map<DWORD, Microsoft::WRL::ComPtr<D3D9::IDirect3DTexture9>> m_SolidColorTextures;
+	std::vector<BYTE> m_UntexturedVertexScratch;
+	D3D9::IDirect3DTexture9* GetSolidColorTexture(DWORD dwColor);
+	BOOL DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
+		DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags);
 	VOID RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
 		DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount);
 
