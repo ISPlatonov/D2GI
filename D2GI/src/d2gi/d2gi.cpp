@@ -1817,6 +1817,8 @@ VOID D2GI::FillStaticBlitTexture(D2GITexture* pDst)
 			*static_cast<DWORD*>(lr.pBits) = 0x01524149; // "RAI\x01"
 		else
 			*static_cast<WORD*>(lr.pBits) = 0x4149;
+		// Windshield size, observed in Remix: hash 1AB38C53610F8621 (mat_1AB38C53610F8621).
+		// Other sizes hash differently because the hash covers the whole image.
 		pSrc->UnlockRect();
 
 		Logger::Log(TEXT("Remix: static content for blit texture %ux%u fmt %u"), desc.Width, desc.Height, (unsigned)desc.Format);

@@ -11,7 +11,7 @@ over "RootNode"
         # Windshield rain layer. The game builds it from a back-buffer readback,
         # which is black under Remix, so replace it with wet thin glass:
         # fully transmissive, refracting through an animated raindrop normal map.
-        over "mat_9CB3B053B225F1AC"
+        over "mat_1AB38C53610F8621"
         {
             over "Shader"
             {
