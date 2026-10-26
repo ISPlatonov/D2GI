@@ -3,3 +3,4 @@ Debug/
 Release/
 *.vcxproj.user
 /D2GI/src/d2gi/shaders/*.h
+remix-mod/HT2_RTX/textures/*.dds
