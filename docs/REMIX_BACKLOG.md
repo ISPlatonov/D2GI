@@ -6,8 +6,11 @@ Status: `todo` / `in progress` / `done`.
 ## Ready
 
 ### 1. Wet windshield effect (raindrops on glass) — todo
-**Problem:** with `rtx.viewModel.enable = True` (needed for the hood), the game's windshield raindrop layer is treated as a view model and covers the whole screen with white dots on black. As a workaround the drop texture is in `rtx.ignoreTextures`, so there are no drops on the glass at all.
-**Acceptance:** drops on the windshield are visible in rain and do not block the view (Remix material replacement with a translucent wet-glass material, or a D2GI-side fix).
+**How the game does it:** each frame the game reads the back buffer back, draws a blurred and refracted copy of it plus droplets into a texture (a sysmem blit into a texture via `UpdateSurface`), and puts that texture on a full-screen quad drawn by the cab camera. The wipers clear arcs in it.
+**Why it breaks under Remix:** back-buffer readback has no ray-traced image, so the layer is black with droplets on top. As a view model it covers the whole windshield. Marking it Particle does not help: it is still opaque black.
+**Current workaround:** the texture hash is in `rtx.ignoreTextures`, so there is no rain on the glass. Requires `rtx.recomputeTextureHashOnWrite` to stay off, otherwise the hash changes every frame.
+**Proper fix:** build wet glass in RTX Remix Toolkit. Put a translucent thin-walled glass material on the windshield with an animated raindrop normal map (sprite sheet), and turn it on only in rain. D2GI could expose rain intensity, or the toolkit material could replace the game's drop texture so it only shows while the game draws it.
+**Acceptance:** the windshield looks wet in rain, with no black areas, and the view through the glass stays clear.
 
 ### 2. Stable hash for the sky dome — todo
 **Problem:** the untextured sky dome gets a 1x1 texture whose hash depends on its color (`UntexturedColors`). The color changes with time of day and weather, so the `rtx.ignoreTextures` entry only covers one shade.
@@ -24,9 +27,11 @@ Splashes, mud on glass, headlight glare at night: check that nothing else blows 
 The hood is a flat untextured surface. Give it a painted-metal material in RTX Remix Toolkit.
 
 ## In review
-- PR #1: keep one D3D9 device across DirectDraw re-creation (Remix crash fix). Needs a few more clean launches before leaving draft.
+- #4: HUD text and digits stop flickering (verified in game).
+- #5: color-keyed textures in the managed pool, which fixes grass on car wheels (verified in game).
 
 ## Done
+- #1 KeepDevice (no crash when entering or leaving 3D), #3 PersistentHUD (top panel).
 - `UntexturedColors`: solid-color textures for untextured draws.
 - `DebugDraws` draw-signature log.
 - Local Workshop mod folder `_rtx_remix_mod` so WorkshopModSync stops reverting our DLL/ini.
