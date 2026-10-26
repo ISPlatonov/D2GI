@@ -3,6 +3,7 @@
 #include "../common/logger.h"
 
 #include "d2gi_texture.h"
+#include "d2gi_config.h"
 #include "d2gi_enums.h"
 #include "d2gi_sysmem_surf.h"
 #include "d2gi.h"
@@ -138,7 +139,11 @@ void D2GITexture::EnsureD3DResourceCreated()
 
 	DWORD Usage;
 	D3D9::D3DPOOL Pool;
-	if (IsDynamicTexture())
+	// [REMIX] ManagedTextures=1: color-keyed textures go to the managed pool. RTX Remix
+	// mis-hashes dynamic default-pool textures, so e.g. car wheels show an unrelated texture.
+	// Blit targets (rain) still need the default pool for UpdateSurface.
+	const bool bForceManaged = D2GIConfig::RemixManagedTexturesEnabled() && m_pLastBlitSource == nullptr;
+	if (IsDynamicTexture() && !bForceManaged)
 	{
 		Usage = D3DUSAGE_DYNAMIC;
 		Pool = D3D9::D3DPOOL_DEFAULT;
