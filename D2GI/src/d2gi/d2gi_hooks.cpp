@@ -885,7 +885,9 @@ namespace BatchedMinimap
 		RECT rect;
 		pD2GI->OnMapDrawSetViewport(*GraphicsData_GetWindowRect(graphics, &rect));
 
+		pD2GI->SetInMapDraw(true);
 		orgMapDraw(_this, graphics, a3);
+		pD2GI->SetInMapDraw(false);
 
 		// Reset the minimap offsets
 		D2GI::m_LastBltX = D2GI::m_LastBltY = 0.0f;

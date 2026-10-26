@@ -526,19 +526,34 @@ VOID D2GI::OnSysMemSurfaceBltOnBackBuffer(D2GISystemMemorySurface* pSrc, RECT* p
 
 	if (D2GIConfig::RemixPersistentHUDEnabled())
 	{
-		// Only big panels: small minimap icons move every frame and would leave trails
-		const float fArea = (frtDst.fRight - frtDst.fLeft) * (frtDst.fBottom - frtDst.fTop);
-		if (fArea >= 2048.0f)
+		// Minimap icons move every frame and would leave trails, so they are not remembered.
+		// Everything else (panels, digits, text) is.
+		if (!m_bInMapDraw)
 		{
+			// A fresh panel hides whatever older glyphs were drawn on top of it before:
+			// forget them, otherwise e.g. a shorter number would keep a stale last digit.
+			const float fArea = (frtDst.fRight - frtDst.fLeft) * (frtDst.fBottom - frtDst.fTop);
+			if (fArea >= 2048.0f)
+			{
+				m_PersistentBlits.erase(std::remove_if(m_PersistentBlits.begin(), m_PersistentBlits.end(), [&](const PersistentBlit& b) {
+					return b.dwLastFrame != m_dwHUDFrame &&
+						b.frtDst.fLeft >= frtScaledDst.fLeft && b.frtDst.fRight <= frtScaledDst.fRight &&
+						b.frtDst.fTop >= frtScaledDst.fTop && b.frtDst.fBottom <= frtScaledDst.fBottom &&
+						!(b.frtDst.fLeft == frtScaledDst.fLeft && b.frtDst.fRight == frtScaledDst.fRight &&
+						  b.frtDst.fTop == frtScaledDst.fTop && b.frtDst.fBottom == frtScaledDst.fBottom);
+				}), m_PersistentBlits.end());
+			}
+
+			// Keep the list in drawing order: the latest blit goes last, so replaying the whole
+			// list reproduces the layering (panel first, then the digits drawn over it)
 			auto it = std::find_if(m_PersistentBlits.begin(), m_PersistentBlits.end(), [&](const PersistentBlit& b) {
 				return b.frtDst.fLeft == frtScaledDst.fLeft && b.frtDst.fTop == frtScaledDst.fTop &&
 					b.frtDst.fRight == frtScaledDst.fRight && b.frtDst.fBottom == frtScaledDst.fBottom;
 			});
-			if (it == m_PersistentBlits.end())
-			{
-				m_PersistentBlits.push_back({});
-				it = std::prev(m_PersistentBlits.end());
-			}
+			if (it != m_PersistentBlits.end())
+				m_PersistentBlits.erase(it);
+			m_PersistentBlits.push_back({});
+			it = std::prev(m_PersistentBlits.end());
 			it->pTexture = pSrcTexture;
 			it->frtSrc = frtSrc;
 			it->frtDst = frtScaledDst;
@@ -566,8 +581,8 @@ VOID D2GI::ReplayPersistentBlits()
 				it = m_PersistentBlits.erase(it);
 				continue;
 			}
-			if (it->dwLastFrame != m_dwHUDFrame)
-				m_Blitter.Blit(pRT.Get(), &it->frtDst, it->pTexture.Get(), &it->frtSrc, it->bColorKey);
+			// Redraw everything, including what the game drew this frame, so newer layers stay on top
+			m_Blitter.Blit(pRT.Get(), &it->frtDst, it->pTexture.Get(), &it->frtSrc, it->bColorKey);
 			++it;
 		}
 	}
