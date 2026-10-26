@@ -77,7 +77,10 @@ void D2GISurface::ExpandColorKeyToSurface(D3D9::IDirect3DSurface9* pSurface, boo
 	DWORD lockFlags = D3DLOCK_NOSYSLOCK;
 	if (bCanDiscard)
 	{
-		lockFlags |= D3DLOCK_DISCARD;
+		// DISCARD is only valid for dynamic default-pool resources
+		D3D9::D3DSURFACE_DESC desc;
+		if (SUCCEEDED(pSurface->GetDesc(&desc)) && desc.Pool == D3D9::D3DPOOL_DEFAULT && (desc.Usage & D3DUSAGE_DYNAMIC) != 0)
+			lockFlags |= D3DLOCK_DISCARD;
 	}
 
 	D3D9::D3DLOCKED_RECT sRect;
