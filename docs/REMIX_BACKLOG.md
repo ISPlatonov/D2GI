@@ -5,12 +5,11 @@ Status: `todo` / `in progress` / `done`.
 
 ## Ready
 
-### 1. Wet windshield effect (raindrops on glass) — todo
+### 1. Wet windshield effect (raindrops on glass) — in progress
 **How the game does it:** each frame the game reads the back buffer back, draws a blurred and refracted copy of it plus droplets into a texture (a sysmem blit into a texture via `UpdateSurface`), and puts that texture on a full-screen quad drawn by the cab camera. The wipers clear arcs in it.
 **Why it breaks under Remix:** back-buffer readback has no ray-traced image, so the layer is black with droplets on top. As a view model it covers the whole windshield. Marking it Particle does not help: it is still opaque black.
-**Current workaround:** the texture hash is in `rtx.ignoreTextures`, so there is no rain on the glass. Requires `rtx.recomputeTextureHashOnWrite` to stay off, otherwise the hash changes every frame.
-**Proper fix:** build wet glass in RTX Remix Toolkit. Put a translucent thin-walled glass material on the windshield with an animated raindrop normal map (sprite sheet), and turn it on only in rain. D2GI could expose rain intensity, or the toolkit material could replace the game's drop texture so it only shows while the game draws it.
-**Acceptance:** the windshield looks wet in rain, with no black areas, and the view through the glass stays clear.
+**Current state:** `StaticBlitTextures` replaces that upload with constant content, so the hash no longer changes every frame. In game that hash is `1AB38C53610F8621`. The wet-glass material targets `mat_1AB38C53610F8621`. The old key `9CB3B053B225F1AC` does not match this DLL. The texture must stay out of `rtx.ignoreTextures`.
+**Acceptance:** the windshield looks wet in rain, with no black areas, and the view through the glass stays clear. Drop size and speed still need a look in game.
 
 ### 2. Stable hash for the sky dome — todo
 **Problem:** the untextured sky dome gets a 1x1 texture whose hash depends on its color (`UntexturedColors`). The color changes with time of day and weather, so the `rtx.ignoreTextures` entry only covers one shade.
