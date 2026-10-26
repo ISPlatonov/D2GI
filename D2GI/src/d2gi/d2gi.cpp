@@ -217,6 +217,7 @@ VOID D2GI::ReleaseResources(bool bResettingDevice)
 	RELEASE(m_pBackBufferCopy);
 
 	m_PersistentBlits.clear();
+	m_StaticBlitSources.clear();
 
 	m_SolidColorTextures.clear();
 }
@@ -593,6 +594,17 @@ VOID D2GI::ReplayPersistentBlits()
 VOID D2GI::OnSysMemSurfaceBltOnTexture(D2GISystemMemorySurface* pSrc, RECT* pSrcRT, D2GITexture* pDst, RECT* pDstRT)
 {
 	// MULTITHREADED_ACCESS
+	if (D2GIConfig::RemixStaticBlitTexturesEnabled())
+	{
+		// [REMIX] StaticBlitTextures=1: the game regenerates the windshield rain texture every frame
+		// from a back-buffer readback. Under Remix the readback is meaningless and every rewrite gets
+		// a new texture hash, so neither a replacement material nor Ignore can target it.
+		// Fill the texture once with fixed content and drop the per-frame updates: its hash is then
+		// constant and the mod's material can replace it.
+		FillStaticBlitTexture(pDst);
+		return;
+	}
+
 	const POINT destPoint = pDstRT != nullptr ? POINT{ pDstRT->left, pDstRT->top } : POINT{ 0, 0 };
 	if (FAILED(m_pDev->UpdateSurface(pSrc->GetSystemMemSurface(), pSrcRT, pDst->GetD3D9Surface(), &destPoint)))
 		Logger::Error(TEXT("Failed to blit the surface"));
@@ -1771,4 +1783,45 @@ BOOL D2GI::DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL 
 	m_pDev->SetTextureStageState(1, D3D9::D3DTSS_ALPHAOP, s[1][D3D7::D3DTSS_ALPHAOP]);
 
 	return TRUE;
+}
+
+
+// ======= Remix: constant content for per-frame blit textures =======
+
+VOID D2GI::FillStaticBlitTexture(D2GITexture* pDst)
+{
+	D3D9::IDirect3DSurface9* pDstSurf = pDst->GetD3D9Surface();
+	if (pDstSurf == nullptr)
+		return;
+
+	D3D9::D3DSURFACE_DESC desc;
+	if (FAILED(pDstSurf->GetDesc(&desc)))
+		return;
+
+	// One constant source surface per size/format, reused for every update
+	const uint64_t key = (uint64_t(desc.Width) << 40) | (uint64_t(desc.Height) << 20) | uint64_t(desc.Format);
+	auto it = m_StaticBlitSources.find(key);
+	if (it == m_StaticBlitSources.end())
+	{
+		Microsoft::WRL::ComPtr<D3D9::IDirect3DSurface9> pSrc;
+		if (FAILED(m_pDev->CreateOffscreenPlainSurface(desc.Width, desc.Height, desc.Format, D3D9::D3DPOOL_SYSTEMMEM, pSrc.GetAddressOf(), nullptr)))
+			return;
+
+		D3D9::D3DLOCKED_RECT lr;
+		if (FAILED(pSrc->LockRect(&lr, nullptr, 0)))
+			return;
+		// Transparent black with a small signature in the first pixel, so the hash is unique and stable
+		for (UINT y = 0; y < desc.Height; y++)
+			ZeroMemory(static_cast<BYTE*>(lr.pBits) + y * lr.Pitch, lr.Pitch);
+		if (desc.Format == D3D9::D3DFMT_A8R8G8B8 || desc.Format == D3D9::D3DFMT_X8R8G8B8)
+			*static_cast<DWORD*>(lr.pBits) = 0x01524149; // "RAI\x01"
+		else
+			*static_cast<WORD*>(lr.pBits) = 0x4149;
+		pSrc->UnlockRect();
+
+		Logger::Log(TEXT("Remix: static content for blit texture %ux%u fmt %u"), desc.Width, desc.Height, (unsigned)desc.Format);
+		it = m_StaticBlitSources.emplace(key, pSrc).first;
+	}
+
+	m_pDev->UpdateSurface(it->second.Get(), nullptr, pDstSurf, nullptr);
 }

@@ -82,6 +82,10 @@ class D2GI
 
 	uint32_t max_primitive_count_ = 0;
 
+	// [REMIX] StaticBlitTextures=1: constant content for textures the game rewrites every frame
+	std::unordered_map<uint64_t, Microsoft::WRL::ComPtr<D3D9::IDirect3DSurface9>> m_StaticBlitSources;
+	VOID FillStaticBlitTexture(D2GITexture* pDst);
+
 	// [REMIX] KeepDevice=1: one IDirect3D9 + device for the whole process.
 	// The game recreates DirectDraw when entering/leaving 3D; RTX Remix's bridge
 	// crashes intermittently when the D3D9 device is destroyed and created again.
