@@ -37,6 +37,7 @@ class D2GIConfig
 	static IMG_FORMAT s_eImgFormat;
 	static bool       s_bRemixDebugDraws;
 	static bool       s_bRemixUntexturedColors;
+	static bool       s_bRemixKeepDevice;
 public:
 	static HookOptions ReadFromFile();
 
@@ -51,6 +52,7 @@ public:
 	static IMG_FORMAT GetScreenshotsFormat() { return s_eImgFormat; }
 	static bool RemixDebugDrawsEnabled() { return s_bRemixDebugDraws; }
 	static bool RemixUntexturedColorsEnabled() { return s_bRemixUntexturedColors; }
+	static bool RemixKeepDeviceEnabled() { return s_bRemixKeepDevice; }
 
 	static std::basic_string<TCHAR> GetConfigFilePath();
 };
