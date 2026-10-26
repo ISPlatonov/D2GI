@@ -26,14 +26,31 @@
 #pragma comment(lib, "d3d9.lib")
 
 float D2GI::m_LastBltX, D2GI::m_LastBltY;
+D3D9::IDirect3D9* D2GI::s_pKeptD3D9 = nullptr;
+D3D9::IDirect3DDevice9* D2GI::s_pKeptDev = nullptr;
 
 D2GI::D2GI()
-	: m_pD3D9(D3D9::Direct3DCreate9(D3D_SDK_VERSION)), m_Blitter(this), m_StridedRenderer(this), m_MinimapRenderer(this)
+	: m_pD3D9(nullptr), m_Blitter(this), m_StridedRenderer(this), m_MinimapRenderer(this)
 {
+	m_pDev = NULL;
+
+	if (s_pKeptD3D9 != nullptr)
+	{
+		// Take over the interface and device kept by the previous D2GI instance
+		m_pD3D9 = s_pKeptD3D9;
+		m_pDev = s_pKeptDev;
+		s_pKeptD3D9 = nullptr;
+		s_pKeptDev = nullptr;
+		Logger::Log(TEXT("Reusing kept D3D9 device"));
+	}
+	else
+	{
+		m_pD3D9 = D3D9::Direct3DCreate9(D3D_SDK_VERSION);
+	}
+
 	if (m_pD3D9 == nullptr)
 		Logger::Error(TEXT("Failed to obtain IDirect3D9 interface"));
 
-	m_pDev = NULL;
 	m_pBackBufferCopy = NULL;
 	m_pBackBufferCopySurf = NULL;
 	m_pfnOriginalWndProc = NULL;
@@ -67,6 +84,41 @@ D2GI::~D2GI()
 	ReleaseResources(/*bResettingDevice=*/ false);
 
 	DetachWndProc();
+
+	if (D2GIConfig::RemixKeepDeviceEnabled() && m_pDev != nullptr && m_pD3D9 != nullptr)
+	{
+		// Leave the device clean for the next D2GI instance
+		if (m_SceneBeginCount > 0)
+		{
+			m_pDev->EndScene();
+			m_SceneBeginCount = 0;
+		}
+		for (DWORD i = 0; i < 8; i++)
+			m_pDev->SetTexture(i, nullptr);
+		m_pDev->SetStreamSource(0, nullptr, 0, 0);
+		m_pDev->SetIndices(nullptr);
+		m_pDev->SetVertexShader(nullptr);
+		m_pDev->SetPixelShader(nullptr);
+		{
+			// Unbind our own render target / depth surfaces so the next Reset() succeeds
+			D3D9::IDirect3DSurface9* pBackBuffer = nullptr;
+			if (SUCCEEDED(m_pDev->GetBackBuffer(0, 0, D3D9::D3DBACKBUFFER_TYPE_MONO, &pBackBuffer)))
+			{
+				m_pDev->SetRenderTarget(0, pBackBuffer);
+				pBackBuffer->Release();
+			}
+			m_pDev->SetDepthStencilSurface(nullptr);
+		}
+
+		RELEASE(s_pKeptDev);
+		RELEASE(s_pKeptD3D9);
+		s_pKeptDev = m_pDev;
+		s_pKeptD3D9 = m_pD3D9;
+		m_pDev = nullptr;
+		m_pD3D9 = nullptr;
+		Logger::Log(TEXT("Keeping D3D9 device for the next DirectDraw instance"));
+		return;
+	}
 
 	RELEASE(m_pDev);
 	RELEASE(m_pD3D9);
@@ -203,6 +255,7 @@ VOID D2GI::ResetD3D9Device()
 	sParams.FullScreen_RefreshRateInHz = D3DPRESENT_RATE_DEFAULT;
 	sParams.SwapEffect                 = D3D9::D3DSWAPEFFECT_FLIP;
 	sParams.Windowed                   = TRUE;
+	sParams.hDeviceWindow              = m_hWnd;
 	sParams.PresentationInterval       =
 		D2GIConfig::VSyncEnabled() ? D3DPRESENT_INTERVAL_ONE : D3DPRESENT_INTERVAL_IMMEDIATE;
 
@@ -244,7 +297,16 @@ VOID D2GI::ResetD3D9Device()
 		}
 	} else {
 		if (FAILED(m_pDev->Reset(&sParams)))
-			Logger::Error(T("Failed to reset D3D9 device"));
+		{
+			// A kept device may refuse to reset (e.g. new window); fall back to a fresh one
+			Logger::Warning(T("Failed to reset D3D9 device, creating a new one"));
+			RELEASE(m_pDev);
+			if (FAILED(m_pD3D9->CreateDevice(D3DADAPTER_DEFAULT, D3D9::D3DDEVTYPE_HAL, m_hWnd,
+			                                 D3DCREATE_HARDWARE_VERTEXPROCESSING | D3DCREATE_MULTITHREADED | D3DCREATE_FPU_PRESERVE,
+			                                 &sParams, &m_pDev))) {
+				Logger::Error(T("Failed to create D3D9 device"));
+			}
+		}
 	}
 
 	Logger::Log(T("Setting %ux%u mode (fullscreen: %s)"), sParams.BackBufferWidth, sParams.BackBufferHeight,

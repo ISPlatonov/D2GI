@@ -81,6 +81,12 @@ class D2GI
 
 	uint32_t max_primitive_count_ = 0;
 
+	// [REMIX] KeepDevice=1: one IDirect3D9 + device for the whole process.
+	// The game recreates DirectDraw when entering/leaving 3D; RTX Remix's bridge
+	// crashes intermittently when the D3D9 device is destroyed and created again.
+	static D3D9::IDirect3D9* s_pKeptD3D9;
+	static D3D9::IDirect3DDevice9* s_pKeptDev;
+
 	// [REMIX] DebugDraws=1: log every unique draw "signature" to d2gi_remix.log
 	DWORD m_dbgStageState[2][32] = {};
 	bool  m_dbgTexXformSet[2] = {};

@@ -17,6 +17,7 @@ wchar_t    D2GIConfig::s_cScreenshotsPath[MAX_PATH];
 IMG_FORMAT D2GIConfig::s_eImgFormat     = IMG_FORMAT::IMG_BMP;
 bool       D2GIConfig::s_bRemixDebugDraws = false;
 bool       D2GIConfig::s_bRemixUntexturedColors = false;
+bool       D2GIConfig::s_bRemixKeepDevice = false;
 
 uint32_t D2GIConfig::GetVideoWidth()
 {
@@ -75,7 +76,9 @@ HookOptions D2GIConfig::ReadFromFile()
 	s_bFixAlpha      = !!GetPrivateProfileInt(TEXT("VIDEO"), TEXT("FixAlpha"), TRUE, configFilePath.c_str());
 	s_bRemixDebugDraws = !!GetPrivateProfileInt(TEXT("REMIX"), TEXT("DebugDraws"), FALSE, configFilePath.c_str());
 	s_bRemixUntexturedColors = !!GetPrivateProfileInt(TEXT("REMIX"), TEXT("UntexturedColors"), FALSE, configFilePath.c_str());
-	Logger::Log(TEXT("Remix options: DebugDraws=%d UntexturedColors=%d"), (int)s_bRemixDebugDraws, (int)s_bRemixUntexturedColors);
+	s_bRemixKeepDevice = !!GetPrivateProfileInt(TEXT("REMIX"), TEXT("KeepDevice"), FALSE, configFilePath.c_str());
+	Logger::Log(TEXT("Remix options: DebugDraws=%d UntexturedColors=%d KeepDevice=%d"),
+		(int)s_bRemixDebugDraws, (int)s_bRemixUntexturedColors, (int)s_bRemixKeepDevice);
 
 	GetPrivateProfileStringW(L"SCREENSHOTS", L"SavePath", L".\\screenshots",
 		s_cScreenshotsPath, MAX_PATH, configFilePath.c_str());
