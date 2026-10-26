@@ -99,6 +99,7 @@ class D2GI
 	};
 	std::vector<PersistentBlit> m_PersistentBlits;
 	uint32_t m_dwHUDFrame = 0;
+	bool m_bInMapDraw = false;
 	VOID ReplayPersistentBlits();
 
 	// [REMIX] DebugDraws=1: log every unique draw "signature" to d2gi_remix.log
@@ -184,6 +185,7 @@ public:
 	void DisableUVOverride() { m_UVOverride.reset(); }
 
 	void OnMapDrawSetViewport(const RECT& viewport) { m_MinimapRenderer.SetViewport(viewport); }
+	void SetInMapDraw(bool bInMapDraw) { m_bInMapDraw = bInMapDraw; }
 	void OnBeginMinimapDraw();
 	void OnEndMinimapDraw();
 	void OnAddMinimapLine(float x1, float y1, float x2, float y2, DWORD color) { m_MinimapRenderer.AddMinimapLine(x1, y1, x2, y2, color); }
