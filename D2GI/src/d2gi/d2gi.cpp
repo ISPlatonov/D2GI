@@ -18,6 +18,7 @@
 #include "d2gi_config.h"
 
 #include <algorithm>
+#include <iterator>
 #include <cmath>
 
 #include <shlwapi.h>
@@ -214,6 +215,8 @@ VOID D2GI::ReleaseResources(bool bResettingDevice)
 
 	RELEASE(m_pBackBufferCopySurf);
 	RELEASE(m_pBackBufferCopy);
+
+	m_PersistentBlits.clear();
 
 	m_SolidColorTextures.clear();
 }
@@ -414,6 +417,7 @@ VOID D2GI::OnBackBufferLock(BOOL bRead)
 void D2GI::OnFlip()
 {
 	if (m_eRenderState == RS_BACKBUFFER_STREAMING) {
+		m_PersistentBlits.clear(); // menus and loading screens redraw everything themselves
 		D3D9::IDirect3DTexture9* backbuffer_texture = m_pDirectDrawProxy->GetPrimaryFlippableSurface()
 			->GetBackBufferSurface()
 			->GetD3D9WritingTexture();
@@ -426,6 +430,8 @@ void D2GI::OnFlip()
 			m_pDev->GetBackBuffer(0, 0, D3D9::D3DBACKBUFFER_TYPE_MONO, pRT.GetAddressOf());
 			m_pDev->StretchRect(m_pMSAASurf, NULL, pRT.Get(), NULL, D3D9::D3DTEXF_NONE);
 		}
+		if (D2GIConfig::RemixPersistentHUDEnabled())
+			ReplayPersistentBlits();
 		Present();
 	}
 }
@@ -517,6 +523,55 @@ VOID D2GI::OnSysMemSurfaceBltOnBackBuffer(D2GISystemMemorySurface* pSrc, RECT* p
 	ScaleFRect(&frtDst, &frtScaledDst);
 	m_Blitter.Blit(pRT.Get(), &frtScaledDst,
 		pSrcTexture, &frtSrc, pSrc->HasColorKeyConversion());
+
+	if (D2GIConfig::RemixPersistentHUDEnabled())
+	{
+		// Only big panels: small minimap icons move every frame and would leave trails
+		const float fArea = (frtDst.fRight - frtDst.fLeft) * (frtDst.fBottom - frtDst.fTop);
+		if (fArea >= 2048.0f)
+		{
+			auto it = std::find_if(m_PersistentBlits.begin(), m_PersistentBlits.end(), [&](const PersistentBlit& b) {
+				return b.frtDst.fLeft == frtScaledDst.fLeft && b.frtDst.fTop == frtScaledDst.fTop &&
+					b.frtDst.fRight == frtScaledDst.fRight && b.frtDst.fBottom == frtScaledDst.fBottom;
+			});
+			if (it == m_PersistentBlits.end())
+			{
+				m_PersistentBlits.push_back({});
+				it = std::prev(m_PersistentBlits.end());
+			}
+			it->pTexture = pSrcTexture;
+			it->frtSrc = frtSrc;
+			it->frtDst = frtScaledDst;
+			it->bColorKey = pSrc->HasColorKeyConversion();
+			it->dwLastFrame = m_dwHUDFrame;
+		}
+	}
+}
+
+
+VOID D2GI::ReplayPersistentBlits()
+{
+	constexpr uint32_t MAX_AGE_FRAMES = 300;
+
+	if (!m_PersistentBlits.empty())
+	{
+		Microsoft::WRL::ComPtr<D3D9::IDirect3DSurface9> pRT;
+		m_pDev->GetRenderTarget(0, pRT.GetAddressOf());
+
+		auto SceneScope = BeginSceneScope();
+		for (auto it = m_PersistentBlits.begin(); it != m_PersistentBlits.end();)
+		{
+			if (m_dwHUDFrame - it->dwLastFrame > MAX_AGE_FRAMES)
+			{
+				it = m_PersistentBlits.erase(it);
+				continue;
+			}
+			if (it->dwLastFrame != m_dwHUDFrame)
+				m_Blitter.Blit(pRT.Get(), &it->frtDst, it->pTexture.Get(), &it->frtSrc, it->bColorKey);
+			++it;
+		}
+	}
+	m_dwHUDFrame++;
 }
 
 

@@ -38,6 +38,7 @@ class D2GIConfig
 	static bool       s_bRemixDebugDraws;
 	static bool       s_bRemixUntexturedColors;
 	static bool       s_bRemixKeepDevice;
+	static bool       s_bRemixPersistentHUD;
 public:
 	static HookOptions ReadFromFile();
 
@@ -53,6 +54,7 @@ public:
 	static bool RemixDebugDrawsEnabled() { return s_bRemixDebugDraws; }
 	static bool RemixUntexturedColorsEnabled() { return s_bRemixUntexturedColors; }
 	static bool RemixKeepDeviceEnabled() { return s_bRemixKeepDevice; }
+	static bool RemixPersistentHUDEnabled() { return s_bRemixPersistentHUD; }
 
 	static std::basic_string<TCHAR> GetConfigFilePath();
 };

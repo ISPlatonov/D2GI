@@ -17,6 +17,7 @@
 #include "d2gi_blitter.h"
 #include "d2gi_minimap.h"
 #include "d2gi_strided_renderer.h"
+#include "../common/frect.h"
 
 #include <wrl/client.h>
 
@@ -86,6 +87,19 @@ class D2GI
 	// crashes intermittently when the D3D9 device is destroyed and created again.
 	static D3D9::IDirect3D9* s_pKeptD3D9;
 	static D3D9::IDirect3DDevice9* s_pKeptDev;
+	// [REMIX] PersistentHUD=1: the game blits 2D HUD panels onto the back buffer only when
+	// they change and relies on the buffer keeping them. RTX Remix builds every frame from
+	// scratch, so the HUD flickers. Remember large blits and replay them on frames that skip them.
+	struct PersistentBlit
+	{
+		Microsoft::WRL::ComPtr<D3D9::IDirect3DTexture9> pTexture;
+		FRECT frtSrc, frtDst;
+		bool bColorKey;
+		uint32_t dwLastFrame;
+	};
+	std::vector<PersistentBlit> m_PersistentBlits;
+	uint32_t m_dwHUDFrame = 0;
+	VOID ReplayPersistentBlits();
 
 	// [REMIX] DebugDraws=1: log every unique draw "signature" to d2gi_remix.log
 	DWORD m_dbgStageState[2][32] = {};
