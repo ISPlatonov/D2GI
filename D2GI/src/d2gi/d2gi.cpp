@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <iterator>
 #include <cmath>
+#include <string>
 
 #include <shlwapi.h>
 #include <windowsx.h>
@@ -1061,6 +1062,19 @@ BOOL D2GI::OnRenderStateGet(D3D7::D3DRENDERSTATETYPE eState, DWORD* pValue)
 }
 
 
+static bool IsWindshieldGlass(D2GITexture* pTex)
+{
+	if (pTex == nullptr)
+		return false;
+	const std::string& name = pTex->GetDebugName();
+	static const char kName[] = "glass.txr";
+	const size_t n = sizeof(kName) - 1;
+	if (name.size() < n || _stricmp(name.c_str() + name.size() - n, kName) != 0)
+		return false;
+	return name.size() == n || name[name.size() - n - 1] == '\\' || name[name.size() - n - 1] == '/';
+}
+
+
 VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
 	DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags)
 {
@@ -1068,6 +1082,20 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 
 	if (D2GIConfig::RemixDebugDrawsEnabled() && !m_bInUntexturedFix)
 		RemixDebugLogDraw(pt, dwFVF, bStrided, pVertexData, dwVertexCount, pIndexData, dwIndexCount);
+
+	// Windshield: the cab camera draws it as one 4-vert fan, stage 0 txr\glass.txr, stage 1 the 128x128
+	// glass_env blit texture with projective UVs. Under Remix that card renders black over the whole
+	// windshield. Match it by the glass.txr name only (no other draw uses that texture) and skip it.
+	if (D2GIConfig::RemixClearWindshieldEnabled() && !m_bInUntexturedFix && IsWindshieldGlass(m_lpCurrentTextures[0]))
+	{
+		static bool s_bLogged = false;
+		if (!s_bLogged)
+		{
+			s_bLogged = true;
+			Logger::Log(TEXT("Remix: skipping windshield glass quad (%u verts)"), (unsigned)dwVertexCount);
+		}
+		return;
+	}
 
 	if (D2GIConfig::RemixUntexturedColorsEnabled() && !m_bInUntexturedFix &&
 		DrawUntexturedWithColor(pt, dwFVF, bStrided, pVertexData, dwVertexCount, pIndexData, dwIndexCount, dwFlags))

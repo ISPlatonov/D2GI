@@ -41,6 +41,7 @@ class D2GIConfig
 	static bool       s_bRemixPersistentHUD;
 	static bool       s_bRemixManagedTextures;
 	static bool       s_bRemixStaticBlitTextures;
+	static bool       s_bRemixClearWindshield;
 public:
 	static HookOptions ReadFromFile();
 
@@ -59,6 +60,7 @@ public:
 	static bool RemixPersistentHUDEnabled() { return s_bRemixPersistentHUD; }
 	static bool RemixManagedTexturesEnabled() { return s_bRemixManagedTextures; }
 	static bool RemixStaticBlitTexturesEnabled() { return s_bRemixStaticBlitTextures; }
+	static bool RemixClearWindshieldEnabled() { return s_bRemixClearWindshield; }
 
 	static std::basic_string<TCHAR> GetConfigFilePath();
 };

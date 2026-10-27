@@ -1388,8 +1388,8 @@ void D2GIHookInjector::InjectHooks(const HookOptions& options)
 		Logger::Log(TEXT("Interface and screenshot hooks don't support this version of the game."));
 	}
 
-	// Texture names injection
-	bool bWantTextureNames = D2GIConfig::RemixDebugDrawsEnabled();
+	// Texture names injection. ClearWindshield needs the glass.txr name to find the cab quad.
+	bool bWantTextureNames = D2GIConfig::RemixDebugDrawsEnabled() || D2GIConfig::RemixClearWindshieldEnabled();
 #ifdef _DEBUG
 	bWantTextureNames = true;
 #endif

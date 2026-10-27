@@ -21,6 +21,7 @@ bool       D2GIConfig::s_bRemixKeepDevice = false;
 bool       D2GIConfig::s_bRemixPersistentHUD = false;
 bool       D2GIConfig::s_bRemixManagedTextures = false;
 bool       D2GIConfig::s_bRemixStaticBlitTextures = false;
+bool       D2GIConfig::s_bRemixClearWindshield = false;
 
 uint32_t D2GIConfig::GetVideoWidth()
 {
@@ -83,9 +84,10 @@ HookOptions D2GIConfig::ReadFromFile()
 	s_bRemixPersistentHUD = !!GetPrivateProfileInt(TEXT("REMIX"), TEXT("PersistentHUD"), FALSE, configFilePath.c_str());
 	s_bRemixManagedTextures = !!GetPrivateProfileInt(TEXT("REMIX"), TEXT("ManagedTextures"), FALSE, configFilePath.c_str());
 	s_bRemixStaticBlitTextures = !!GetPrivateProfileInt(TEXT("REMIX"), TEXT("StaticBlitTextures"), FALSE, configFilePath.c_str());
-	Logger::Log(TEXT("Remix options: DebugDraws=%d UntexturedColors=%d KeepDevice=%d PersistentHUD=%d ManagedTextures=%d StaticBlitTextures=%d"),
+	s_bRemixClearWindshield = !!GetPrivateProfileInt(TEXT("REMIX"), TEXT("ClearWindshield"), FALSE, configFilePath.c_str());
+	Logger::Log(TEXT("Remix options: DebugDraws=%d UntexturedColors=%d KeepDevice=%d PersistentHUD=%d ManagedTextures=%d StaticBlitTextures=%d ClearWindshield=%d"),
 		(int)s_bRemixDebugDraws, (int)s_bRemixUntexturedColors, (int)s_bRemixKeepDevice, (int)s_bRemixPersistentHUD,
-		(int)s_bRemixManagedTextures, (int)s_bRemixStaticBlitTextures);
+		(int)s_bRemixManagedTextures, (int)s_bRemixStaticBlitTextures, (int)s_bRemixClearWindshield);
 
 	GetPrivateProfileStringW(L"SCREENSHOTS", L"SavePath", L".\\screenshots",
 		s_cScreenshotsPath, MAX_PATH, configFilePath.c_str());
