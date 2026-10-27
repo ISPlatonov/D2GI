@@ -122,6 +122,7 @@ class D2GI
 	std::unordered_map<DWORD, Microsoft::WRL::ComPtr<D3D9::IDirect3DTexture9>> m_SolidColorTextures;
 	std::vector<BYTE> m_UntexturedVertexScratch;
 	D3D9::IDirect3DTexture9* GetSolidColorTexture(DWORD dwColor);
+	BOOL IsBackdropDraw(DWORD dwFVF);
 	BOOL DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
 		DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags);
 	VOID RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,

@@ -16,14 +16,6 @@ Status: `todo` / `in progress` / `done`.
 **How to get rain:** see the `ht2-test-build` skill. The «Погода» slider all the way left gives rain, even when Remix does not show it; confirm with `txr\rain.txr` in `d2gi_remix.log`.
 **Acceptance:** rain is visible in the world and the windshield looks wet in rain, with no black areas and a clear view through the glass.
 
-### 2. Stable hash for the sky dome — todo
-**Problem:** the untextured sky dome gets a 1x1 texture whose hash depends on its color (`UntexturedColors`). The color changes with time of day and weather, so the `rtx.ignoreTextures` entry only covers one shade.
-**Acceptance:** D2GI recognizes the sky dome and skips the solid-color texture for it (or uses one constant texture), so it is hidden in every weather and time of day.
-
-### 3. Stable hash for the ground fallback plane — todo
-**Problem:** same as the sky dome. The untextured khaki plane under the map covers roads and grass under Remix. It is ignored by a color-dependent hash.
-**Acceptance:** the plane never appears in any region, weather or time of day.
-
 ### 4. Audit other cab-camera effects with View Model on — todo
 Splashes, mud on glass, headlight glare at night: check that nothing else blows up like the raindrops did.
 
@@ -34,6 +26,7 @@ The hood is a flat untextured surface. Give it a painted-metal material in RTX R
 With #13 every hash can be matched to a texture name. Found so far: exhaust smoke and dust (`vapor_00..03`, `dust_02`) are in `rtx.skyBoxTextures`; tree shadows and traffic-light glows are in `particleTextures`/`ignoreTextures` as expected. Recheck every entry by name and move wrong ones.
 
 ## In review
+- #16 SkipBackdrop (items 2 and 3: sky dome and khaki ground plane hidden in any weather and time of day): the game draws them untextured with z-write off before the world, the only untextured 3D draws like that (checked in `d2gi_remix.log`). D2GI skips them.
 - #13: `DebugDraws` log shows the Remix hash, vertex alpha, blend state and positions for each draw.
 - #4: HUD text and digits stop flickering (verified in game).
 - #5: color-keyed textures in the managed pool, which fixes grass on car wheels (verified in game).
