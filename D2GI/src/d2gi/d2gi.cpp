@@ -1716,6 +1716,13 @@ VOID D2GI::RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrid
 		m_pDev->GetRenderState(D3D9::D3DRS_ALPHATESTENABLE, &rsAT);
 		m_pDev->GetRenderState(D3D9::D3DRS_ZWRITEENABLE, &rsZW);
 		m_pDev->GetRenderState(D3D9::D3DRS_LIGHTING, &rsLight);
+		{
+			D3D9::D3DMATRIX w, v;
+			m_pDev->GetTransform(D3D9::D3DTS_WORLD, &w);
+			m_pDev->GetTransform(D3D9::D3DTS_VIEW, &v);
+			fprintf(m_pRemixLog, "    pos min(%.1f %.1f %.1f) max(%.1f %.1f %.1f) worldT(%.1f %.1f %.1f) viewT(%.1f %.1f %.1f) view00 %.2f\n",
+				mn[0], mn[1], mn[2], mx[0], mx[1], mx[2], w._41, w._42, w._43, v._41, v._42, v._43, v._11);
+		}
 		fprintf(m_pRemixLog, "    blend %u src%u dst%u alphatest %u zwrite %u lighting %u\n",
 			(unsigned)rsBlend, (unsigned)rsSrc, (unsigned)rsDst, (unsigned)rsAT, (unsigned)rsZW, (unsigned)rsLight);
 
