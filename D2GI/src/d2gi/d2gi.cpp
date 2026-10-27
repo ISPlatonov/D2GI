@@ -2503,9 +2503,50 @@ static int ReadPlayerHeadlightSwitch(DWORD* pAuto)
 }
 
 
+static int CopyGameMemory(void* pDst, DWORD dwSrc, DWORD dwSize)
+{
+	__try
+	{
+		memcpy(pDst, reinterpret_cast<const void*>(dwSrc), dwSize);
+		return 1;
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return 0;
+	}
+}
+
+
+// DebugDraws: on dump frames, write the world view matrix and the player vehicle object to
+// d2gi_vehicle_<frame>.bin (64 bytes view, then 0x6000 bytes of the vehicle) to find its transform offline.
+VOID D2GI::DumpPlayerVehicle(const FLOAT* v)
+{
+	if (!D2GIConfig::RemixDebugDrawsEnabled() || !IsDumpFrame() || m_dbgVehicleDumpFrame == m_dbg3DFrame)
+		return;
+	m_dbgVehicleDumpFrame = m_dbg3DFrame;
+	DWORD dwGame = 0, dwVeh = 0;
+	if (!ReadGameDword(0x6D2078, &dwGame) || dwGame < 0x10000 || !ReadGameDword(dwGame + 0x268, &dwVeh) || dwVeh < 0x10000)
+		return;
+	static BYTE s_buf[0x6000];
+	if (!CopyGameMemory(s_buf, dwVeh, sizeof(s_buf)))
+		return;
+	char name[64];
+	sprintf_s(name, "d2gi_vehicle_%u.bin", m_dbg3DFrame);
+	FILE* f = nullptr;
+	if (fopen_s(&f, name, "wb") == 0 && f != nullptr)
+	{
+		fwrite(v, sizeof(FLOAT), 16, f);
+		fwrite(&dwVeh, 4, 1, f);
+		fwrite(s_buf, 1, sizeof(s_buf), f);
+		fclose(f);
+	}
+}
+
+
 VOID D2GI::SetRemixHeadlights(const FLOAT* v)
 {
 	m_bHeadlightsSetThisFrame = true;
+	DumpPlayerVehicle(v);
 
 	DWORD dwAuto = 0;
 	const int iSwitch = ReadPlayerHeadlightSwitch(&dwAuto);

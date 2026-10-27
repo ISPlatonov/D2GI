@@ -145,6 +145,8 @@ class D2GI
 	bool m_bHeadlightsOn = false;
 	VOID SetRemixHeadlights(const FLOAT* pView);
 	bool IsDumpFrame() const;
+	VOID DumpPlayerVehicle(const FLOAT* pView);
+	uint32_t m_dbgVehicleDumpFrame = 0;
 	VOID MaybeEmitCabRain();
 	BOOL DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
 		DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags, BOOL bSkyDome = FALSE);
