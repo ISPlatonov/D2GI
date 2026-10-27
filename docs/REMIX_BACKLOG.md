@@ -21,7 +21,7 @@ Status: `todo` / `in progress` / `done`.
 Splashes, mud on glass, headlight glare at night: check that nothing else blows up like the raindrops did.
 
 ### 5. Hood material — todo
-The hood is a flat untextured surface. Give it a painted-metal material in RTX Remix Toolkit.
+The hood is not untextured: it is a 20-vertex cab-camera draw with the truck's 256x256 texture atlas (Remix hash `F70CEFD60206880E`, unnamed), drawn before the cab's UI-tagged parts, so it is ray-traced. A material on that hash would also apply to the whole truck seen from outside (tyres, glass and lights are in the same atlas). Needs a roughness/metallic map that follows the atlas layout, made in RTX Remix Toolkit.
 
 ### 6. Clean up rtx.conf categories — in progress
 Hash → name table in `remix-mod/README.md`. Smoke and dust moved from sky to particles in #18. Still unnamed: entries never seen in the logged runs (other regions, menus) and the 30 `uiTextures`, of which 5 are cab parts (needed as UI for now, see item 1).
