@@ -14,7 +14,7 @@ Status: `todo` / `in progress` / `done`.
 **Why rain streaks are still invisible:** open. They are ray-traced and were tried as particles, still not visible. Suspects: Remix takes the material diffuse alpha (0.0 for these draws, `diffSrc1` = vertex color) or the 16x16 texture's alpha, or billboard correction flattens the thin triangles. No rain fell in the 27.10 18:00 run, so this was not tested further.
 **Tried:** removing the cab textures from `uiTextures` moves the injection later, but the cab then renders twice (a dark translucent panel and stray lines over the gauges) and rain is still not visible. Reverted.
 **Next:** test rain with `rtx.enableBillboardOrientationCorrection = False` and with a D2GI fix that sets material alpha to 1 for `rain.txr`; for the glass, draw the wet layer before the cab or untag the cab properly.
-**How to get rain:** see the `ht2-test-build` skill. The «Погода» slider all the way left gives rain, even when Remix does not show it; confirm with `txr\rain.txr` in `d2gi_remix.log`.
+**How to get rain:** not reliable yet. The «Погода» slider (left = rainy) only makes rain more frequent. In three test runs on 27.10 the game drew `rain.txr` once in the second frame and never again (frame dumps from #17): it was not raining, and earlier "rain in the log" was this one-off draw. `wstart`/`wtemp` in TRUCK.INI did not start rain (`wtemp=0` hangs loading). Real rain needs either the owner to report it while playing, or a debug switch that forces the game's weather variable (find it in `king.exe`).
 **Acceptance:** rain is visible in the world and the windshield looks wet in rain, with no black areas and a clear view through the glass.
 
 ### 4. Audit other cab-camera effects with View Model on — todo
