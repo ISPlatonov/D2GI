@@ -113,6 +113,8 @@ class D2GI
 	FILE* m_pRemixLog = nullptr;
 	std::unordered_set<std::string> m_dbgSeenDraws;
 	uint32_t m_dbgDrawCounter = 0;
+	uint32_t m_dbg3DFrame = 0;      // 3D frames presented, for the frame-order dump
+	uint32_t m_dbgFrameDraw = 0;    // draw index inside the current frame
 
 	// [REMIX] UntexturedColors=1: untextured draws get a 1x1 texture in their color,
 	// because Remix renders geometry without an albedo texture as plain white.
