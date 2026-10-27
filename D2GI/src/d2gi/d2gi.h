@@ -149,7 +149,7 @@ class D2GI
 	uint32_t m_dbgVehicleDumpFrame = 0;
 	FLOAT m_World[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
 	// Player lamp positions in truck coordinates (x right, y forward, z up); defaults until learned from lg_head quads
-	FLOAT m_PlayerLamp[2][3] = { { -0.9f, 5.0f, -0.3f }, { 0.9f, 5.0f, -0.3f } };
+	FLOAT m_PlayerLamp[2][3] = { { -0.9f, 6.1f, 0.05f }, { 0.85f, 6.1f, 0.05f } }; // the start truck's lamps
 	int m_nPlayerLampSamples[2] = { 0, 0 };
 	Microsoft::WRL::ComPtr<D3D9::IDirect3DTexture9> m_pPlayerGlowTex;
 	bool m_bPlayerGlowFailed = false;
