@@ -154,10 +154,24 @@ void D2GITexture::EnsureD3DResourceCreated()
 		Pool = D3D9::D3DPOOL_MANAGED;
 	}
 
-	if (FAILED(pDev->CreateTexture(m_dwWidth, m_dwHeight,
-		m_dwMipMapCount, Usage,
-		eFormat, Pool, &m_pTexture, nullptr)))
-		Logger::Error(TEXT("Failed to create texture"));
+	HRESULT hr = pDev->CreateTexture(m_dwWidth, m_dwHeight, m_dwMipMapCount, Usage, eFormat, Pool, &m_pTexture, nullptr);
+	if (FAILED(hr))
+	{
+		// Usually the 32-bit address space is full (king.exe is not large-address-aware, and the
+		// RTX Remix bridge lives in this process too). Log why, then retry without the managed
+		// pool's system-memory copy before giving up.
+		MEMORYSTATUSEX ms = { sizeof(ms) };
+		GlobalMemoryStatusEx(&ms);
+		Logger::Log(TEXT("Remix: CreateTexture %ux%u mips %u fmt %u pool %u failed, hr 0x%08X, free address space %u MB"),
+			(unsigned)m_dwWidth, (unsigned)m_dwHeight, (unsigned)m_dwMipMapCount, (unsigned)eFormat, (unsigned)Pool,
+			(unsigned)hr, (unsigned)(ms.ullAvailVirtual >> 20));
+		if (Pool == D3D9::D3DPOOL_MANAGED && IsDynamicTexture())
+			hr = pDev->CreateTexture(m_dwWidth, m_dwHeight, m_dwMipMapCount, D3DUSAGE_DYNAMIC, eFormat,
+				D3D9::D3DPOOL_DEFAULT, &m_pTexture, nullptr);
+		if (FAILED(hr))
+			Logger::Error(TEXT("Failed to create texture"));
+		Logger::Log(TEXT("Remix: created it in the default pool instead"));
+	}
 
 	for (size_t i = 0; i < m_dwMipMapCount; i++)
 	{

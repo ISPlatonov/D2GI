@@ -39,3 +39,24 @@ function Ensure-LocalModRegistered {
         Say 'Добавил папку мода в workshop.cfg.'
     }
 }
+
+# king.exe is a 32-bit exe without the large-address-aware flag, so it only gets 2 GB of address space.
+# With RTX Remix (the bridge lives in the game process) that runs out when a new region loads, and the
+# game crashes with "Failed to create texture". Setting the flag gives it 4 GB on 64-bit Windows.
+# A Steam update or file check restores the original exe; RTX-Update.cmd sets the flag again.
+function Ensure-LargeAddressAware {
+    $exe = Join-Path $GameDir 'king.exe'
+    $bytes = [IO.File]::ReadAllBytes($exe)
+    $pe = [BitConverter]::ToInt32($bytes, 0x3C)
+    $off = $pe + 4 + 18
+    $ch = [BitConverter]::ToUInt16($bytes, $off)
+    if ($ch -band 0x20) { return }
+    New-Item -ItemType Directory $BackupDir -Force | Out-Null
+    $orig = Join-Path $BackupDir 'king.exe.orig'
+    if (-not (Test-Path $orig)) { Copy-Item $exe $orig }
+    $ch = $ch -bor 0x20
+    $bytes[$off] = [byte]($ch -band 0xFF)
+    $bytes[$off + 1] = [byte](($ch -shr 8) -band 0xFF)
+    [IO.File]::WriteAllBytes($exe, $bytes)
+    Say 'king.exe: включил 4 ГБ памяти (оригинал в _backup_d2gi\king.exe.orig).' Green
+}

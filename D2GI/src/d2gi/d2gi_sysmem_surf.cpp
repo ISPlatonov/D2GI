@@ -148,8 +148,15 @@ void D2GISystemMemorySurface::EnsureD3DResourceCreated()
 
 	D2GISurface::EnsureD3DResourceCreated();
 
-	if (FAILED(GetD3D9Device()->CreateOffscreenPlainSurface(m_dwWidth, m_dwHeight, GetEffectiveD3DFormat(), D3D9::D3DPOOL_SYSTEMMEM, m_systemMemSurface.GetAddressOf(), nullptr)))
+	const HRESULT hr = GetD3D9Device()->CreateOffscreenPlainSurface(m_dwWidth, m_dwHeight, GetEffectiveD3DFormat(), D3D9::D3DPOOL_SYSTEMMEM, m_systemMemSurface.GetAddressOf(), nullptr);
+	if (FAILED(hr))
+	{
+		MEMORYSTATUSEX ms = { sizeof(ms) };
+		GlobalMemoryStatusEx(&ms);
+		Logger::Log(TEXT("Remix: system-memory surface %ux%u failed, hr 0x%08X, free address space %u MB"),
+			(unsigned)m_dwWidth, (unsigned)m_dwHeight, (unsigned)hr, (unsigned)(ms.ullAvailVirtual >> 20));
 		Logger::Error(TEXT("Failed to create surface"));
+	}
 }
 
 void D2GISystemMemorySurface::FlushResourceToGPU()

@@ -53,6 +53,7 @@ try {
     Get-ChildItem $x -Filter '*.cmd' | Copy-Item -Destination $GameDir -Force
 
     Ensure-LocalModRegistered
+    Ensure-LargeAddressAware
     Say "Стало: $(Get-InstalledVersion)" Green
     Say 'Готово. Запускай игру через RTX-Play.cmd или Steam — Steam сам применит мод при запуске.' Green
 }
