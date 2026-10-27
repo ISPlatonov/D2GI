@@ -429,6 +429,11 @@ void D2GI::OnFlip()
 
 		BlitToBackbufferAndPresent(nullptr, backbuffer_texture, nullptr);
 	} else if (m_eRenderState == RS_BACKBUFFER_BLITTING || m_eRenderState == RS_3D_RENDERING) {
+		if (D2GIConfig::RemixDebugDrawsEnabled())
+		{
+			m_dbg3DFrame++;
+			m_dbgFrameDraw = 0;
+		}
 		if (m_pMSAASurf)
 		{
 			Microsoft::WRL::ComPtr<D3D9::IDirect3DSurface9> pRT;
@@ -1620,6 +1625,19 @@ VOID D2GI::RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrid
 	constexpr size_t MAX_UNIQUE_DRAWS = 4000;
 
 	m_dbgDrawCounter++;
+	m_dbgFrameDraw++;
+
+	// Frame-order dump: every 600th 3D frame (up to 8 times), one line per draw in drawing order.
+	// Remix ray-traces draws only until the first UI-tagged texture, so the order matters.
+	if (m_pRemixLog != nullptr && m_dbg3DFrame > 0 && m_dbg3DFrame % 600 == 0 && m_dbg3DFrame <= 600 * 8)
+	{
+		DWORD rsZW = 0, rsBlend = 0;
+		m_pDev->GetRenderState(D3D9::D3DRS_ZWRITEENABLE, &rsZW);
+		m_pDev->GetRenderState(D3D9::D3DRS_ALPHABLENDENABLE, &rsBlend);
+		const std::string& n0 = m_lpCurrentTextures[0] != nullptr ? m_lpCurrentTextures[0]->GetDebugName() : std::string("none");
+		fprintf(m_pRemixLog, "F%u %4u pt%d v%u zw%u bl%u %s\n", m_dbg3DFrame, m_dbgFrameDraw, (int)pt, (unsigned)dwVertexCount,
+			(unsigned)rsZW, (unsigned)rsBlend, n0.empty() ? "?" : n0.c_str());
+	}
 	if (m_dbgSeenDraws.size() >= MAX_UNIQUE_DRAWS)
 		return;
 
