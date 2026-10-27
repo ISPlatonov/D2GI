@@ -1100,6 +1100,20 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 		return;
 	}
 
+	// Backdrop: the game first draws an untextured sky dome and a flat ground plane around the camera with
+	// z-write off. Under Remix they cover the world (sky) or lie over roads (khaki plane), and their
+	// UntexturedColors hash changes with weather and time of day. No other untextured 3D draw has z-write off.
+	if (D2GIConfig::RemixSkipBackdropEnabled() && !m_bInUntexturedFix && !m_bInMapDraw && IsBackdropDraw(dwFVF))
+	{
+		static bool s_bLogged = false;
+		if (!s_bLogged)
+		{
+			s_bLogged = true;
+			Logger::Log(TEXT("Remix: skipping untextured backdrop draw (%u verts)"), (unsigned)dwVertexCount);
+		}
+		return;
+	}
+
 	if (D2GIConfig::RemixUntexturedColorsEnabled() && !m_bInUntexturedFix &&
 		DrawUntexturedWithColor(pt, dwFVF, bStrided, pVertexData, dwVertexCount, pIndexData, dwIndexCount, dwFlags))
 		return;
@@ -1830,6 +1844,19 @@ namespace
 		}
 		return dwResult;
 	}
+}
+
+
+BOOL D2GI::IsBackdropDraw(DWORD dwFVF)
+{
+	const bool bScreenSpace = (dwFVF & 0x00E) == 0x004;
+	const bool bUntextured = m_lpCurrentTextures[0] == nullptr ||
+		m_dbgStageState[0][D3D7::D3DTSS_COLOROP] == D3D7::D3DTOP_DISABLE;
+	if (bScreenSpace || !bUntextured)
+		return FALSE;
+	DWORD dwZWrite = TRUE;
+	m_pDev->GetRenderState(D3D9::D3DRS_ZWRITEENABLE, &dwZWrite);
+	return dwZWrite == FALSE;
 }
 
 
