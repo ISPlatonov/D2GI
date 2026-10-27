@@ -21,17 +21,23 @@ Splashes, mud on glass, headlight glare at night: check that nothing else blows 
 ### 5. Hood material — todo
 The hood is a flat untextured surface. Give it a painted-metal material in RTX Remix Toolkit.
 
-### 6. Clean up rtx.conf categories — todo
-With #13 every hash can be matched to a texture name. Found so far: exhaust smoke and dust (`vapor_00..03`, `dust_02`) are in `rtx.skyBoxTextures`; tree shadows and traffic-light glows are in `particleTextures`/`ignoreTextures` as expected. Recheck every entry by name and move wrong ones.
+### 6. Clean up rtx.conf categories — in progress
+Hash → name table in `remix-mod/README.md`. Smoke and dust moved from sky to particles in #18. Still unnamed: entries never seen in the logged runs (other regions, menus) and the 30 `uiTextures`, of which 5 are cab parts (needed as UI for now, see item 1).
+
+### 7. Game froze after toggling cab panels — todo
+27.10 18:04: after pressing F3 (info), F5 (radio), F6, F7 in the cab, the game stopped responding; `bridge64.log` ends with `Data Queue overwrite condition triggered`, no crash log. Seen once. Reproduce and check whether a panel or a camera switch causes it.
 
 ## In review
-- #16 SkipBackdrop (items 2 and 3: sky dome and khaki ground plane hidden in any weather and time of day): the game draws them untextured with z-write off before the world, the only untextured 3D draws like that (checked in `d2gi_remix.log`). D2GI skips them.
-- #13: `DebugDraws` log shows the Remix hash, vertex alpha, blend state and positions for each draw.
+- #17: `DebugDraws` frame-order dump (verified in game).
+- #18: smoke and dust as particles instead of sky.
+- #16 SkipBackdrop (items 2 and 3: sky dome and khaki ground plane hidden in any weather and time of day). Checked in game at the start base in one weather; other weather / time of day still to check.
 - #4: HUD text and digits stop flickering (verified in game).
 - #5: color-keyed textures in the managed pool, which fixes grass on car wheels (verified in game).
 
 ## Done
 - Workshop item 3828304518 updated to `pr-18 cc5d082` by Claude (27.10 18:22), change note in Russian.
+- #13 `DebugDraws` log shows the Remix hash, vertex alpha, blend state and positions for each draw (hashes match rtx.conf entries).
+- #15 Steam Workshop package (`RTX-Workshop.cmd`); published by the owner as item 3828304518 (friends).
 - #10 ClearWindshield: no black film over the windshield (verified in game).
 - #11 install bundle as a GitHub release + `RTX-Update`/`RTX-Play`/`RTX-Logs` scripts (used to install in this session).
 - #12 agent guide (`AGENTS.md`) and project skills.
