@@ -1,9 +1,17 @@
-name: Build ddraw.dll
+name: Build
 
 on:
   push:
+    branches: [master]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -18,15 +26,51 @@ jobs:
       - name: Build Release x86
         run: msbuild D2GI.sln /m /p:Configuration=Release /p:Platform=x86 /p:PlatformToolset=v143 /p:PostBuildEventUseInBuild=false
 
-      - name: Collect files
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Make install bundle
         shell: pwsh
         run: |
-          New-Item -ItemType Directory out | Out-Null
-          Get-ChildItem -Recurse -Filter ddraw.dll | Where-Object { $_.FullName -match ‘Release’ } | Select-Object -First 1 | Copy-Item -Destination out
-          Copy-Item D2GI/d2gi.ini out
-          Get-ChildItem out
+          pip install --quiet numpy pillow
+          $dll = Get-ChildItem -Recurse -Filter ddraw.dll | Where-Object { $_.FullName -match 'Release' } | Select-Object -First 1
+          $sha = "${{ github.event.pull_request.head.sha || github.sha }}".Substring(0, 7)
+          $ref = "${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref_name }}"
+          python tools/make_bundle.py --dll $dll.FullName --out dist/HT2-RTX.zip --version "$ref $sha"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: D2GI-${{ github.sha }}
-          path: out/
+          name: HT2-RTX-${{ github.sha }}
+          path: dist/HT2-RTX.zip
+
+  # Rolling releases with a stable download URL:
+  #   master -> tag "latest", pull request N -> tag "pr-N" (removed when the PR closes).
+  # tools/windows/Update.ps1 and the agent skills download from these.
+  publish:
+    needs: build
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/master') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: HT2-RTX-${{ github.sha }}
+
+      - name: Publish release
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            TAG="pr-${{ github.event.pull_request.number }}"
+            TITLE="PR #${{ github.event.pull_request.number }}: ${{ github.event.pull_request.title }}"
+            SHA="${{ github.event.pull_request.head.sha }}"
+            PRE="--prerelease"
+          else
+            TAG="latest"; TITLE="Latest master"; SHA="${{ github.sha }}"; PRE="--latest"
+          fi
+          NOTES="Build of ${SHA:0:7}. Install: run RTX-Update.cmd in the game folder (for a PR: RTX-Update.cmd -Pr N)."
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" HT2-RTX.zip --target "$SHA" --title "$TITLE" --notes "$NOTES" $PRE
