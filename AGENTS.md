@@ -24,7 +24,8 @@ Read this before changing anything. Most of it was learned the hard way.
 | `D2GI/d2gi.ini` | Shipped ini; every switch is documented by a comment above it |
 | `remix-mod/package/` | Contents of the game's `_rtx_remix_mod` folder (see Install) |
 | `tools/make_bundle.py` | Builds `HT2-RTX.zip` |
-| `tools/windows/` | `RTX-Update.cmd`, `RTX-Play.cmd`, `RTX-Logs.cmd` for the gaming PC |
+| `tools/windows/` | `RTX-Update.cmd`, `RTX-Play.cmd`, `RTX-Logs.cmd`, `RTX-Workshop.cmd` for the gaming PC |
+| `remix-mod/workshop/` | Steam Workshop descriptor (`mod.cfg`: title, description, visibility, priority -5) and preview |
 | `docs/REMIX_BACKLOG.md` | The board (GitHub Issues are off). Update it in the same PR as the change. |
 
 ## Build → release → install
@@ -40,6 +41,15 @@ Read this before changing anything. Most of it was learned the hard way.
    Without Windows shell access, see the `ht2-test-build` skill.
 4. **Launch through Steam** (`RTX-Play.cmd` / `steam://rungameid/4487840`). Starting `king.exe` directly skips
    WorkshopModSync.
+
+## Steam Workshop
+
+The game has an official uploader (`Workshop Uploader GUI - Hard Truck 2.exe`) and mod format (`Mod Template\mod.cfg`).
+`RTX-Workshop.cmd` builds `<game>\_workshop_stage` from the installed build plus the RTX Remix runtime and opens the
+uploader. The owner presses Publish (it is their Steam account; never publish or change visibility without asking).
+The uploader warns about every .exe/.dll (43 warnings): that is expected, 0 errors means it can be published.
+Priorities: Workshop item -5 (wins over D2GI / Modern Patch at 0), local test folder `_rtx_remix_mod` -10 (wins over
+the Workshop item, so test builds still apply).
 
 ## Hard rules
 

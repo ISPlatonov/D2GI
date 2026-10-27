@@ -3,7 +3,7 @@
 Layout of the zip:
     mod/      -> <game>/_rtx_remix_mod/  (Workshop local mod folder; WorkshopModSync copies it
                  into the game root on every Steam launch)
-    _ht2rtx_tools/ -> <game>/_ht2rtx_tools/
+    _ht2rtx_tools/ -> <game>/_ht2rtx_tools/  (scripts, and workshop/ = Steam Workshop descriptor + preview)
     *.cmd     -> <game>/  (double-click launchers)
     VERSION.txt
 
@@ -24,6 +24,7 @@ PACKAGE = os.path.join(ROOT, "remix-mod", "package")
 GEN_RAIN = os.path.join(ROOT, "remix-mod", "tools", "gen_rain_normal.py")
 RAIN_DDS = os.path.join("rtx-remix", "mods", "HT2_RTX", "textures", "rain_glass_normal.dds")
 WIN_TOOLS = os.path.join(ROOT, "tools", "windows")
+WORKSHOP = os.path.join(ROOT, "remix-mod", "workshop")
 
 
 def add_tree(zf, src_dir, arc_prefix):
@@ -59,6 +60,7 @@ def main():
         os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
         with zipfile.ZipFile(args.out, "w", zipfile.ZIP_DEFLATED) as zf:
             add_tree(zf, mod, "mod")
+            add_tree(zf, WORKSHOP, "_ht2rtx_tools/workshop")
             for name in sorted(os.listdir(WIN_TOOLS)):
                 full = os.path.join(WIN_TOOLS, name)
                 zf.write(full, name if name.endswith(".cmd") else f"_ht2rtx_tools/{name}")
