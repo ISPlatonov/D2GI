@@ -507,6 +507,8 @@ VOID D2GI::OnLightEnable(DWORD i, BOOL bEnable)
 		static int s_nLogged = 0;
 		if (s_nLogged++ < 100)
 			Logger::Log(TEXT("Remix light %u enable %d"), (unsigned)i, (int)bEnable);
+		if (IsDumpFrame())
+			fprintf(m_pRemixLog, "E%u %u %d\n", m_dbg3DFrame, (unsigned)i, (int)bEnable);
 	}
 	m_pDev->LightEnable(i, bEnable);
 }
@@ -1019,7 +1021,20 @@ VOID D2GI::OnLightSet(DWORD i, D3D7::LPD3DLIGHT7 pLight)
 				pLight->dvAttenuation0, pLight->dvAttenuation1, pLight->dvAttenuation2, pLight->dvTheta, pLight->dvPhi);
 		}
 	}
+	// DebugDraws dump frames: every light the game sets, in draw order (next to the F<frame> draw lines)
+	if (D2GIConfig::RemixDebugDrawsEnabled() && pLight != nullptr && IsDumpFrame())
+		fprintf(m_pRemixLog, "L%u %u type%u diff(%.2f %.2f %.2f) pos(%.1f %.1f %.1f) dir(%.2f %.2f %.2f) range %.1f att(%.3f %.3f %.4f) cone(%.2f %.2f)\n",
+			m_dbg3DFrame, (unsigned)i, (unsigned)pLight->dltType, pLight->dcvDiffuse.r, pLight->dcvDiffuse.g, pLight->dcvDiffuse.b,
+			pLight->dvPosition.x, pLight->dvPosition.y, pLight->dvPosition.z,
+			pLight->dvDirection.x, pLight->dvDirection.y, pLight->dvDirection.z, pLight->dvRange,
+			pLight->dvAttenuation0, pLight->dvAttenuation1, pLight->dvAttenuation2, pLight->dvTheta, pLight->dvPhi);
 	m_pDev->SetLight(i, (D3D9::D3DLIGHT9*)pLight);
+}
+
+
+bool D2GI::IsDumpFrame() const
+{
+	return m_pRemixLog != nullptr && m_dbg3DFrame > 0 && m_dbg3DFrame % 600 == 0 && m_dbg3DFrame <= 600 * 40;
 }
 
 
@@ -1903,7 +1918,7 @@ VOID D2GI::RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrid
 
 	// Frame-order dump: every 600th 3D frame (up to 8 times), one line per draw in drawing order.
 	// Remix ray-traces draws only until the first UI-tagged texture, so the order matters.
-	if (m_pRemixLog != nullptr && m_dbg3DFrame > 0 && m_dbg3DFrame % 600 == 0 && m_dbg3DFrame <= 600 * 8)
+	if (IsDumpFrame())
 	{
 		DWORD rsZW = 0, rsBlend = 0;
 		m_pDev->GetRenderState(D3D9::D3DRS_ZWRITEENABLE, &rsZW);
