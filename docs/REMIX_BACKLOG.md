@@ -26,6 +26,8 @@ Splashes, mud on glass, headlight glare at night: check that nothing else blows 
 The hood is a flat untextured surface. Give it a painted-metal material in RTX Remix Toolkit.
 
 ## In review
+- #11: install bundle as a GitHub release + `RTX-Update`/`RTX-Play`/`RTX-Logs` scripts.
+- #12: agent guide (`AGENTS.md`) and project skills.
 - #4: HUD text and digits stop flickering (verified in game).
 - #5: color-keyed textures in the managed pool, which fixes grass on car wheels (verified in game).
 
