@@ -1062,6 +1062,19 @@ BOOL D2GI::OnRenderStateGet(D3D7::D3DRENDERSTATETYPE eState, DWORD* pValue)
 }
 
 
+static bool IsWindshieldGlass(D2GITexture* pTex)
+{
+	if (pTex == nullptr)
+		return false;
+	const std::string& name = pTex->GetDebugName();
+	static const char kName[] = "glass.txr";
+	const size_t n = sizeof(kName) - 1;
+	if (name.size() < n || _stricmp(name.c_str() + name.size() - n, kName) != 0)
+		return false;
+	return name.size() == n || name[name.size() - n - 1] == '\\' || name[name.size() - n - 1] == '/';
+}
+
+
 VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
 	DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags)
 {
@@ -1070,31 +1083,18 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 	if (D2GIConfig::RemixDebugDrawsEnabled() && !m_bInUntexturedFix)
 		RemixDebugLogDraw(pt, dwFVF, bStrided, pVertexData, dwVertexCount, pIndexData, dwIndexCount);
 
-	// Windshield (d2gi_remix.log #214): one 4-vert fan, stage 0 glass.txr, stage 1 glass_env
-	// with SELECTARG1 and projective UVs. Under Remix that card is a black view-model film.
-	// glass.txr is used by this draw only. Names are injected while ClearWindshield is on.
-	if (D2GIConfig::RemixClearWindshieldEnabled() && !m_bInUntexturedFix)
+	// Windshield: the cab camera draws it as one 4-vert fan, stage 0 txr\glass.txr, stage 1 the 128x128
+	// glass_env blit texture with projective UVs. Under Remix that card renders black over the whole
+	// windshield. Match it by the glass.txr name only (no other draw uses that texture) and skip it.
+	if (D2GIConfig::RemixClearWindshieldEnabled() && !m_bInUntexturedFix && IsWindshieldGlass(m_lpCurrentTextures[0]))
 	{
-		D2GITexture* pGlass = m_lpCurrentTextures[0];
-		const bool bNamedGlass = pGlass != nullptr && pGlass->GetDebugName().find("glass.txr") != std::string::npos;
-		const bool bEnvFan = pt == D3D7::D3DPT_TRIANGLEFAN && dwVertexCount == 4 && pIndexData == nullptr &&
-			((dwFVF >> 8) & 0xF) >= 2 &&
-			m_dbgStageState[1][D3D7::D3DTSS_COLOROP] == D3D7::D3DTOP_SELECTARG1;
-		if (bNamedGlass || bEnvFan)
+		static bool s_bLogged = false;
+		if (!s_bLogged)
 		{
-			static bool s_bLogged = false;
-			if (!s_bLogged)
-			{
-				s_bLogged = true;
-				D2GITexture* pEnv = m_lpCurrentTextures[1];
-				Logger::Log(TEXT("Remix: skipping windshield quad named=%d op=%u tex1=%ux%u"),
-					(int)bNamedGlass,
-					(unsigned)m_dbgStageState[1][D3D7::D3DTSS_COLOROP],
-					pEnv != nullptr ? (unsigned)pEnv->GetWidth() : 0u,
-					pEnv != nullptr ? (unsigned)pEnv->GetHeight() : 0u);
-			}
-			return;
+			s_bLogged = true;
+			Logger::Log(TEXT("Remix: skipping windshield glass quad (%u verts)"), (unsigned)dwVertexCount);
 		}
+		return;
 	}
 
 	if (D2GIConfig::RemixUntexturedColorsEnabled() && !m_bInUntexturedFix &&
