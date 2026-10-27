@@ -2505,14 +2505,15 @@ VOID D2GI::SetRemixHeadlights(const FLOAT* v)
 	L.Theta = 0.35f;
 	L.Phi = 0.9f;
 
-	// Headlamps: ~2.5 units ahead of the driver's eye, ~1.5 below it, ~0.9 to each side
+	// Headlamps: in front of the hood (~4.5 units ahead of the driver's eye, ~2 below it, ~0.9 to each side),
+	// so the beams do not light the hood itself
 	for (int side = 0; side < 2; side++)
 	{
 		const float sx = side == 0 ? -0.9f : 0.9f;
 		L.Position = {
-			eye[0] + fwd[0] * 2.5f - up[0] * 1.5f + right[0] * sx,
-			eye[1] + fwd[1] * 2.5f - up[1] * 1.5f + right[1] * sx,
-			eye[2] + fwd[2] * 2.5f - up[2] * 1.5f + right[2] * sx,
+			eye[0] + fwd[0] * 4.5f - up[0] * 2.0f + right[0] * sx,
+			eye[1] + fwd[1] * 4.5f - up[1] * 2.0f + right[1] * sx,
+			eye[2] + fwd[2] * 4.5f - up[2] * 2.0f + right[2] * sx,
 		};
 		m_pDev->SetLight((side == 0 ? REMIX_HEADLIGHT_INDEX : REMIX_HEADLIGHT_INDEX2), &L);
 		m_pDev->LightEnable((side == 0 ? REMIX_HEADLIGHT_INDEX : REMIX_HEADLIGHT_INDEX2), TRUE);
