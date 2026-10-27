@@ -62,11 +62,11 @@ focus the game later, click its window. Never use open_application on the game.
 - `d2gi.log`: the last `Remix options:` line shows the expected switches; look for your one-time `Remix: ...` notice.
 - `rtx-remix/logs/remix-dxvk.log`: no new errors; `crash-upload.log` not updated.
 - In game: drive to the situation (rain, night, cab view) and take a screenshot. Compare with the PR's test plan.
-  - **Rain:** there is no reliable way yet. The «Погода» slider in «Новая игра» (cloud icon left, sun right; all the
-    way left = «погода: дождливая») only makes rain more frequent. `txr\rain.txr` drawn once right after loading is
-    not rain; check the frame dumps (`F<frame> ...` lines) for it. Do not edit `wstart`/`wtemp` in TRUCK.INI: it did
-    not start rain, and `wtemp=0` hangs the game on loading. Leaving a running game: Esc → «Выход» → «Не сохранять».
-    In the main menu Enter opens «Игра» (useful when the Claude window covers the right-hand buttons).
+  - **Rain:** «Игра» → «Новая игра» with the «Погода» slider all the way left (tooltip «погода: дождливая»); it
+    rains from the start. Press **V** for the third-person camera: rain streaks are visible there. From the cab the game
+    draws no rain streaks at all, only the windshield effect. Do not edit `wstart`/`wtemp` in TRUCK.INI (`wtemp=0`
+    hangs loading). Leaving a running game: Esc → «Выход» → «Не сохранять». In the main menu Enter opens «Игра»
+    (useful when the Claude window covers the right-hand buttons).
   - The game cursor follows the OS mouse. The Claude desktop window can sit over the right-hand menu buttons and is
     hidden in screenshots, so clicks there land in it. If a click on «Игра» does nothing, ask the owner to minimize it.
   If you cannot see the screen, ask the owner for a screenshot and say exactly what to look at.
