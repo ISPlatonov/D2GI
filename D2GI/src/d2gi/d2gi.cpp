@@ -2679,8 +2679,14 @@ bool D2GI::ReadPlayerMatrix(FLOAT* M)
 // into the left or right lamp and return true.
 bool D2GI::LearnPlayerLamp(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD dwVertexCount)
 {
+	static int s_nRejectLogs = 0;
 	if (bStrided || pVertexData == nullptr || dwVertexCount == 0 || (dwFVF & 0x00E) != 0x002)
+	{
+		if (s_nRejectLogs++ < 5)
+			Logger::Log(TEXT("Remix: lg_head quad not used for the lamps (fvf 0x%X strided %d verts %u)"),
+				(unsigned)dwFVF, (int)bStrided, (unsigned)dwVertexCount);
 		return false;
+	}
 	float M[12];
 	if (!ReadPlayerMatrix(M))
 		return false;
@@ -2706,7 +2712,12 @@ bool D2GI::LearnPlayerLamp(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD 
 	for (int r = 0; r < 3; r++)
 		l[r] = d[0] * M[r * 3] + d[1] * M[r * 3 + 1] + d[2] * M[r * 3 + 2];
 	if (fabsf(l[0]) > 3.0f || l[1] < 1.0f || l[1] > 10.0f || fabsf(l[2]) > 3.0f)
+	{
+		if (s_nRejectLogs++ < 20)
+			Logger::Log(TEXT("Remix: lg_head quad at (%.1f %.1f %.1f), (%.2f %.2f %.2f) on the player truck: not a player lamp"),
+				w[0], w[1], w[2], l[0], l[1], l[2]);
 		return false;
+	}
 
 	const int side = l[0] < 0.0f ? 0 : 1;
 	int& n = m_nPlayerLampSamples[side];
