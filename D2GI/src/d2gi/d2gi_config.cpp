@@ -25,6 +25,7 @@ bool       D2GIConfig::s_bRemixClearWindshield = false;
 bool       D2GIConfig::s_bRemixSkipBackdrop = false;
 bool       D2GIConfig::s_bRemixEmitCabRain = false;
 int        D2GIConfig::s_nRemixSunStrength = 0;
+int        D2GIConfig::s_nRemixHeadlights = 0;
 bool       D2GIConfig::s_bRemixSkyDome = false;
 
 uint32_t D2GIConfig::GetVideoWidth()
@@ -93,10 +94,11 @@ HookOptions D2GIConfig::ReadFromFile()
 	s_bRemixEmitCabRain = !!GetPrivateProfileInt(TEXT("REMIX"), TEXT("EmitCabRain"), FALSE, configFilePath.c_str());
 	s_nRemixSunStrength = (int)GetPrivateProfileInt(TEXT("REMIX"), TEXT("SunStrength"), 0, configFilePath.c_str());
 	s_bRemixSkyDome = !!GetPrivateProfileInt(TEXT("REMIX"), TEXT("SkyDome"), FALSE, configFilePath.c_str());
-	Logger::Log(TEXT("Remix options: DebugDraws=%d UntexturedColors=%d KeepDevice=%d PersistentHUD=%d ManagedTextures=%d StaticBlitTextures=%d ClearWindshield=%d SkipBackdrop=%d EmitCabRain=%d SunStrength=%d SkyDome=%d"),
+	s_nRemixHeadlights = (int)GetPrivateProfileInt(TEXT("REMIX"), TEXT("Headlights"), 0, configFilePath.c_str());
+	Logger::Log(TEXT("Remix options: DebugDraws=%d UntexturedColors=%d KeepDevice=%d PersistentHUD=%d ManagedTextures=%d StaticBlitTextures=%d ClearWindshield=%d SkipBackdrop=%d EmitCabRain=%d SunStrength=%d SkyDome=%d Headlights=%d"),
 		(int)s_bRemixDebugDraws, (int)s_bRemixUntexturedColors, (int)s_bRemixKeepDevice, (int)s_bRemixPersistentHUD,
 		(int)s_bRemixManagedTextures, (int)s_bRemixStaticBlitTextures, (int)s_bRemixClearWindshield, (int)s_bRemixSkipBackdrop,
-		(int)s_bRemixEmitCabRain, s_nRemixSunStrength, (int)s_bRemixSkyDome);
+		(int)s_bRemixEmitCabRain, s_nRemixSunStrength, (int)s_bRemixSkyDome, s_nRemixHeadlights);
 
 	GetPrivateProfileStringW(L"SCREENSHOTS", L"SavePath", L".\\screenshots",
 		s_cScreenshotsPath, MAX_PATH, configFilePath.c_str());

@@ -139,6 +139,11 @@ class D2GI
 	bool m_bSawDrop = false;
 	bool m_bSawRain = false;
 	bool m_bEmittedCabRain = false;
+	bool m_bSawCabThisFrame = false;   // pribor.txr drawn in this frame (driver's view)
+	bool m_bLastFrameCab = false;
+	bool m_bHeadlightsSetThisFrame = false;
+	bool m_bHeadlightsOn = false;
+	VOID SetRemixHeadlights(const FLOAT* pView);
 	VOID MaybeEmitCabRain();
 	BOOL DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
 		DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags, BOOL bSkyDome = FALSE);

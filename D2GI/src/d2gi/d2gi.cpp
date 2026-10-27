@@ -28,6 +28,8 @@
 
 // Light slot reserved for the Remix sun (SunStrength); the game itself was seen using slots 0-1 and 9-10.
 static const DWORD REMIX_SUN_LIGHT_INDEX = 7;
+static const DWORD REMIX_HEADLIGHT_INDEX = 6;  // left; the game only ever disables 6 and 8
+static const DWORD REMIX_HEADLIGHT_INDEX2 = 8; // right
 
 #include <shlwapi.h>
 #include <windowsx.h>
@@ -496,6 +498,8 @@ VOID D2GI::OnClear(DWORD dwCount, D3D7::LPD3DRECT pRects, DWORD dwFlags, D3D7::D
 
 VOID D2GI::OnLightEnable(DWORD i, BOOL bEnable)
 {
+	if (D2GIConfig::RemixHeadlights() > 0 && (i == REMIX_HEADLIGHT_INDEX || i == REMIX_HEADLIGHT_INDEX2))
+		return;
 	if (D2GIConfig::RemixSunStrength() > 0 && i == REMIX_SUN_LIGHT_INDEX)
 		return;
 	if (D2GIConfig::RemixDebugDrawsEnabled())
@@ -962,6 +966,8 @@ VOID D2GI::OnTransformSet(D3D7::D3DTRANSFORMSTATETYPE eType, D3D7::D3DMATRIX* pM
 			{
 				CopyMemory(m_WorldView, pMatrix, sizeof(m_WorldView));
 				m_bHaveWorldView = true;
+				if (D2GIConfig::RemixHeadlights() > 0 && !m_bHeadlightsSetThisFrame)
+					SetRemixHeadlights(m_WorldView);
 			}
 			m_pDev->SetTransform(D3D9::D3DTS_VIEW, (D3D9::D3DMATRIX*)pMatrix);
 			break;
@@ -983,6 +989,8 @@ VOID D2GI::OnTransformSet(D3D7::D3DTRANSFORMSTATETYPE eType, D3D7::D3DMATRIX* pM
 
 VOID D2GI::OnLightSet(DWORD i, D3D7::LPD3DLIGHT7 pLight)
 {
+	if (D2GIConfig::RemixHeadlights() > 0 && (i == REMIX_HEADLIGHT_INDEX || i == REMIX_HEADLIGHT_INDEX2))
+		return;
 	if (D2GIConfig::RemixSunStrength() > 0 && i == REMIX_SUN_LIGHT_INDEX)
 	{
 		static bool s_bLogged = false;
@@ -1034,6 +1042,9 @@ VOID D2GI::Present()
 	m_bSawDrop = false;
 	m_bSawRain = false;
 	m_bEmittedCabRain = false;
+	m_bLastFrameCab = m_bSawCabThisFrame;
+	m_bSawCabThisFrame = false;
+	m_bHeadlightsSetThisFrame = false;
 
 	// In D3D7 it was allowed to call Present inside a BeginScene/EndScene pair, but in D3D9 it's not.
 	bool bRestartScene = false;
@@ -1352,6 +1363,8 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 		else if (TextureNameIs(m_lpCurrentTextures[0], "pribor.txr"))
 			MaybeEmitCabRain();
 	}
+	if (D2GIConfig::RemixHeadlights() > 0 && !m_bInUntexturedFix && TextureNameIs(m_lpCurrentTextures[0], "pribor.txr"))
+		m_bSawCabThisFrame = true;
 
 	// Backdrop: the game first draws an untextured sky dome and a flat ground plane around the camera with
 	// z-write off. Under Remix they cover the world (sky) or lie over roads (khaki plane), and their
@@ -2420,5 +2433,94 @@ VOID D2GI::SetRemixSun()
 		s_nLogged++;
 		Logger::Log(TEXT("Remix: sun from fog 0x%06X -> (%.2f %.2f %.2f)"), (unsigned)(m_dwFogColor & 0xFFFFFF),
 			sun.Diffuse.r, sun.Diffuse.g, sun.Diffuse.b);
+	}
+}
+
+
+// ======= Remix: the player's headlights =======
+// The game lights the road in front of the player's truck only with ambient and vertex color, so under Remix the
+// road ahead is dark at night. From the driver's view (pribor.txr drawn in the previous frame) and when the fog
+// says it is dark, put two spot lights in front of the camera. The world camera is the view matrix the game sets
+// for the world (row vectors: p_view = p_world * R + t), so the camera axes in world space are the rows of R^-1.
+VOID D2GI::SetRemixHeadlights(const FLOAT* v)
+{
+	m_bHeadlightsSetThisFrame = true;
+
+	const bool bOn = m_bLastFrameCab && NightFactor() < 0.35f;
+	if (!bOn)
+	{
+		if (m_bHeadlightsOn)
+		{
+			m_pDev->LightEnable(REMIX_HEADLIGHT_INDEX, FALSE);
+			m_pDev->LightEnable(REMIX_HEADLIGHT_INDEX2, FALSE);
+			m_bHeadlightsOn = false;
+		}
+		return;
+	}
+
+	// R = upper 3x3 of the view matrix, t = its translation; invert R (general 3x3 inverse)
+	const float a = v[0], b = v[1], c = v[2];
+	const float d = v[4], e = v[5], f = v[6];
+	const float g = v[8], h = v[9], k = v[10];
+	const float det = a * (e * k - f * h) - b * (d * k - f * g) + c * (d * h - e * g);
+	if (fabsf(det) < 1e-6f)
+		return;
+	const float id = 1.0f / det;
+	float inv[9] = {
+		(e * k - f * h) * id, (c * h - b * k) * id, (b * f - c * e) * id,
+		(f * g - d * k) * id, (a * k - c * g) * id, (c * d - a * f) * id,
+		(d * h - e * g) * id, (b * g - a * h) * id, (a * e - b * d) * id,
+	};
+	const float tx = v[12], ty = v[13], tz = v[14];
+	float eye[3], right[3], up[3], fwd[3];
+	for (int j = 0; j < 3; j++)
+	{
+		eye[j] = -(tx * inv[0 + j] + ty * inv[3 + j] + tz * inv[6 + j]);
+		right[j] = inv[0 + j];
+		up[j] = inv[3 + j];
+		fwd[j] = inv[6 + j];
+	}
+	auto norm = [](float* p) {
+		const float l = std::sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
+		if (l > 0.0f) { p[0] /= l; p[1] /= l; p[2] /= l; }
+	};
+	norm(right); norm(up); norm(fwd);
+
+	// Beam: forward, tilted slightly down
+	float dir[3] = { fwd[0] - up[0] * 0.12f, fwd[1] - up[1] * 0.12f, fwd[2] - up[2] * 0.12f };
+	norm(dir);
+
+	const float s = D2GIConfig::RemixHeadlights() / 100.0f;
+	D3D9::D3DLIGHT9 L = {};
+	L.Type = D3D9::D3DLIGHT_SPOT;
+	L.Diffuse = { 1.0f * s, 0.95f * s, 0.85f * s, 1.0f };
+	L.Specular = L.Diffuse;
+	L.Direction = { dir[0], dir[1], dir[2] };
+	L.Range = 120.0f;
+	L.Falloff = 1.0f;
+	L.Attenuation0 = 1.0f;
+	L.Theta = 0.35f;
+	L.Phi = 0.9f;
+
+	// Headlamps: ~2.5 units ahead of the driver's eye, ~1.5 below it, ~0.9 to each side
+	for (int side = 0; side < 2; side++)
+	{
+		const float sx = side == 0 ? -0.9f : 0.9f;
+		L.Position = {
+			eye[0] + fwd[0] * 2.5f - up[0] * 1.5f + right[0] * sx,
+			eye[1] + fwd[1] * 2.5f - up[1] * 1.5f + right[1] * sx,
+			eye[2] + fwd[2] * 2.5f - up[2] * 1.5f + right[2] * sx,
+		};
+		m_pDev->SetLight((side == 0 ? REMIX_HEADLIGHT_INDEX : REMIX_HEADLIGHT_INDEX2), &L);
+		m_pDev->LightEnable((side == 0 ? REMIX_HEADLIGHT_INDEX : REMIX_HEADLIGHT_INDEX2), TRUE);
+	}
+
+	if (!m_bHeadlightsOn)
+	{
+		m_bHeadlightsOn = true;
+		static int s_nLogged = 0;
+		if (s_nLogged++ < 10)
+			Logger::Log(TEXT("Remix: player headlights on at (%.1f %.1f %.1f) dir (%.2f %.2f %.2f) up (%.2f %.2f %.2f)"),
+				eye[0], eye[1], eye[2], dir[0], dir[1], dir[2], up[0], up[1], up[2]);
 	}
 }
