@@ -116,6 +116,9 @@ class D2GI
 	DWORD m_dwFogColor = 0;            // last D3DRENDERSTATE_FOGCOLOR, follows time of day and weather
 	bool  m_bSunSetThisFrame = false;
 	VOID SetRemixSun();
+	FLOAT NightFactor() const;
+	DWORD SkyDomeScale() const;
+	static DWORD ScaleColor(DWORD dwColor, DWORD dwScale);
 	uint32_t m_dbg3DFrame = 0;      // 3D frames presented, for the frame-order dump
 	uint32_t m_dbgFrameDraw = 0;    // draw index inside the current frame
 
@@ -138,7 +141,8 @@ class D2GI
 	bool m_bEmittedCabRain = false;
 	VOID MaybeEmitCabRain();
 	BOOL DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
-		DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags);
+		DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags, BOOL bSkyDome = FALSE);
+	BOOL IsDomeShaped(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD dwVertexCount);
 	VOID RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
 		DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount);
 

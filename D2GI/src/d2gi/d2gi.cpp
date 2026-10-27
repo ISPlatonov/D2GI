@@ -1358,6 +1358,19 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 	// UntexturedColors hash changes with weather and time of day. No other untextured 3D draw has z-write off.
 	if (D2GIConfig::RemixSkipBackdropEnabled() && !m_bInUntexturedFix && !m_bInMapDraw && IsBackdropDraw(dwFVF))
 	{
+		// SkyDome: keep the dome (not the flat ground plane) as Remix sky with a constant texture, so clear
+		// weather does not show a black sky above the skybox images.
+		if (D2GIConfig::RemixSkyDomeEnabled() && IsDomeShaped(dwFVF, bStrided, pVertexData, dwVertexCount) &&
+			DrawUntexturedWithColor(pt, dwFVF, bStrided, pVertexData, dwVertexCount, pIndexData, dwIndexCount, dwFlags, TRUE))
+		{
+			static bool s_bDomeLogged = false;
+			if (!s_bDomeLogged)
+			{
+				s_bDomeLogged = true;
+				Logger::Log(TEXT("Remix: drawing the sky dome with the constant sky texture (%u verts)"), (unsigned)dwVertexCount);
+			}
+			return;
+		}
 		static bool s_bLogged = false;
 		if (!s_bLogged)
 		{
@@ -2113,6 +2126,37 @@ namespace
 }
 
 
+BOOL D2GI::IsDomeShaped(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD dwVertexCount)
+{
+	// The ground plane is flat (one Z, Z is up); the dome spans height.
+	const BYTE* pPos = nullptr;
+	UINT uStride = 0;
+	if (pVertexData == nullptr || dwVertexCount == 0)
+		return FALSE;
+	if (bStrided)
+	{
+		auto* pData = static_cast<D3D7::D3DDRAWPRIMITIVESTRIDEDDATA*>(pVertexData);
+		pPos = static_cast<const BYTE*>(pData->position.lpvData);
+		uStride = pData->position.dwStride;
+	}
+	else
+	{
+		pPos = static_cast<const BYTE*>(pVertexData);
+		uStride = (UINT)CalcFVFStride(dwFVF);
+	}
+	if (pPos == nullptr)
+		return FALSE;
+	float zMin = 1e30f, zMax = -1e30f;
+	for (DWORD v = 0; v < dwVertexCount; v++)
+	{
+		const float z = reinterpret_cast<const float*>(pPos + v * uStride)[2];
+		zMin = std::min(zMin, z);
+		zMax = std::max(zMax, z);
+	}
+	return (zMax - zMin) > 1.0f;
+}
+
+
 BOOL D2GI::IsBackdropDraw(DWORD dwFVF)
 {
 	const bool bScreenSpace = (dwFVF & 0x00E) == 0x004;
@@ -2127,7 +2171,7 @@ BOOL D2GI::IsBackdropDraw(DWORD dwFVF)
 
 
 BOOL D2GI::DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
-	DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags)
+	DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags, BOOL bSkyDome)
 {
 	const bool bScreenSpace = (dwFVF & 0x00E) == 0x004; // XYZRHW: 2D/UI, leave alone
 	const bool bUntextured = m_lpCurrentTextures[0] == nullptr ||
@@ -2144,9 +2188,12 @@ BOOL D2GI::DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL 
 		dwColor = ColorValueToARGB(m_CurrentMaterial.diffuse) & 0xF8F8F8F8;
 	dwColor |= 0xFF000000; // opaque; transparency still comes from blend states
 
-	D3D9::IDirect3DTexture9* pSolid = GetSolidColorTexture(dwColor);
+	// The sky dome gets one constant white texture (Remix hash CD6B1C920D3F662C, listed in rtx.skyBoxTextures)
+	// and keeps its color through the texture stage, so its hash does not change with time of day and weather.
+	D3D9::IDirect3DTexture9* pSolid = GetSolidColorTexture(bSkyDome ? 0xFFFFFFFF : dwColor);
 	if (pSolid == nullptr)
 		return FALSE;
+	const bool bVertexColor = (dwFVF & 0x040) && m_dwDiffuseMaterialSource == D3D9::D3DMCS_COLOR1;
 
 	// Geometry without texture coordinates gets (0,0) for every vertex
 	static const FLOAT s_ZeroUV[2] = { 0.0f, 0.0f };
@@ -2182,13 +2229,49 @@ BOOL D2GI::DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL 
 
 	const DWORD (&s)[2][32] = m_dbgStageState;
 	m_pDev->SetTexture(0, pSolid);
-	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLOROP, D3D9::D3DTOP_SELECTARG1);
-	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG1, D3DTA_TEXTURE);
+	DWORD dwSavedTFactor = 0;
+	if (bSkyDome)
+	{
+		// Remix lights the scene with the sky, so the game's dusk/night dome colors light it far too much.
+		// Dim the dome by the same fog-luminance curve the sun uses (full at day, ~0.2 at 23:00, ~0.02 at 2:00).
+		const DWORD dwScale = SkyDomeScale();
+		const DWORD dwScaleColor = 0xFF000000 | (dwScale << 16) | (dwScale << 8) | dwScale;
+		m_pDev->GetRenderState(D3D9::D3DRS_TEXTUREFACTOR, &dwSavedTFactor);
+		m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLOROP, D3D9::D3DTOP_MODULATE);
+		m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG1, D3DTA_TEXTURE);
+		if (bVertexColor)
+		{
+			// texture * vertex color, then * the scale in stage 1
+			m_pDev->SetRenderState(D3D9::D3DRS_TEXTUREFACTOR, dwScaleColor);
+			m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG2, D3DTA_DIFFUSE);
+		}
+		else
+		{
+			m_pDev->SetRenderState(D3D9::D3DRS_TEXTUREFACTOR, ScaleColor(dwColor, dwScale));
+			m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG2, D3DTA_TFACTOR);
+		}
+	}
+	else
+	{
+		m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLOROP, D3D9::D3DTOP_SELECTARG1);
+		m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG1, D3DTA_TEXTURE);
+	}
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAOP, D3D9::D3DTOP_SELECTARG1);
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_TEXCOORDINDEX, 0);
-	m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLOROP, D3D9::D3DTOP_DISABLE);
-	m_pDev->SetTextureStageState(1, D3D9::D3DTSS_ALPHAOP, D3D9::D3DTOP_DISABLE);
+	if (bSkyDome && bVertexColor)
+	{
+		m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLOROP, D3D9::D3DTOP_MODULATE);
+		m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLORARG1, D3DTA_CURRENT);
+		m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLORARG2, D3DTA_TFACTOR);
+		m_pDev->SetTextureStageState(1, D3D9::D3DTSS_ALPHAOP, D3D9::D3DTOP_SELECTARG1);
+		m_pDev->SetTextureStageState(1, D3D9::D3DTSS_ALPHAARG1, D3DTA_CURRENT);
+	}
+	else
+	{
+		m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLOROP, D3D9::D3DTOP_DISABLE);
+		m_pDev->SetTextureStageState(1, D3D9::D3DTSS_ALPHAOP, D3D9::D3DTOP_DISABLE);
+	}
 
 	m_bInUntexturedFix = true;
 	D2GITexture* pSavedTex0 = m_lpCurrentTextures[0];
@@ -2201,9 +2284,20 @@ BOOL D2GI::DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL 
 	m_pDev->SetTexture(0, pSavedTex0 != nullptr ? pSavedTex0->GetD3D9Texture() : nullptr);
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLOROP, s[0][D3D7::D3DTSS_COLOROP]);
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG1, s[0][D3D7::D3DTSS_COLORARG1]);
+	if (bSkyDome)
+	{
+		m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG2, s[0][D3D7::D3DTSS_COLORARG2]);
+		m_pDev->SetRenderState(D3D9::D3DRS_TEXTUREFACTOR, dwSavedTFactor);
+	}
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAOP, s[0][D3D7::D3DTSS_ALPHAOP]);
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAARG1, s[0][D3D7::D3DTSS_ALPHAARG1]);
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_TEXCOORDINDEX, s[0][D3D7::D3DTSS_TEXCOORDINDEX]);
+	if (bSkyDome && bVertexColor)
+	{
+		m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLORARG1, s[1][D3D7::D3DTSS_COLORARG1]);
+		m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLORARG2, s[1][D3D7::D3DTSS_COLORARG2]);
+		m_pDev->SetTextureStageState(1, D3D9::D3DTSS_ALPHAARG1, s[1][D3D7::D3DTSS_ALPHAARG1]);
+	}
 	m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLOROP, s[1][D3D7::D3DTSS_COLOROP]);
 	m_pDev->SetTextureStageState(1, D3D9::D3DTSS_ALPHAOP, s[1][D3D7::D3DTSS_ALPHAOP]);
 
@@ -2259,6 +2353,42 @@ VOID D2GI::FillStaticBlitTexture(D2GITexture* pDst)
 // only. The fog color follows time of day and weather (WEATHER.INI fog_* tables: ~255 255 230 on a good day,
 // ~84 80 76 on a bad day, ~40 81 102 / 17 22 25 at night), so it drives a directional light that RTX Remix turns
 // into a distant light: color = fog color normalized, brightness = SunStrength% * luminance^2.
+// Fog-luminance curve shared by the sun and the sky dome: (lum / 0.6)^2, clamped to [0.02, 1].
+FLOAT D2GI::NightFactor() const
+{
+	const float r = ((m_dwFogColor >> 16) & 0xFF) / 255.0f;
+	const float g = ((m_dwFogColor >> 8) & 0xFF) / 255.0f;
+	const float b = (m_dwFogColor & 0xFF) / 255.0f;
+	const float lum = (0.2126f * r + 0.7152f * g + 0.0722f * b) / 0.6f;
+	return std::min(1.0f, std::max(0.02f, lum * lum));
+}
+
+
+DWORD D2GI::SkyDomeScale() const
+{
+	const DWORD dwScale = (DWORD)(NightFactor() * 255.0f + 0.5f);
+	static DWORD s_dwLogged = 0xFFFFFFFF;
+	static int s_nLogged = 0;
+	if (dwScale != s_dwLogged && s_nLogged < 30)
+	{
+		s_dwLogged = dwScale;
+		s_nLogged++;
+		Logger::Log(TEXT("Remix: sky dome brightness %u/255 for fog 0x%06X"), (unsigned)dwScale,
+			(unsigned)(m_dwFogColor & 0xFFFFFF));
+	}
+	return dwScale;
+}
+
+
+DWORD D2GI::ScaleColor(DWORD dwColor, DWORD dwScale)
+{
+	DWORD dwOut = dwColor & 0xFF000000;
+	for (int shift = 0; shift < 24; shift += 8)
+		dwOut |= ((((dwColor >> shift) & 0xFF) * dwScale / 255) & 0xFF) << shift;
+	return dwOut;
+}
+
+
 VOID D2GI::SetRemixSun()
 {
 	m_bSunSetThisFrame = true;
