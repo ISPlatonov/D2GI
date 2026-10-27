@@ -1358,6 +1358,19 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 	// UntexturedColors hash changes with weather and time of day. No other untextured 3D draw has z-write off.
 	if (D2GIConfig::RemixSkipBackdropEnabled() && !m_bInUntexturedFix && !m_bInMapDraw && IsBackdropDraw(dwFVF))
 	{
+		// SkyDome: keep the dome (not the flat ground plane) as Remix sky with a constant texture, so clear
+		// weather does not show a black sky above the skybox images.
+		if (D2GIConfig::RemixSkyDomeEnabled() && IsDomeShaped(dwFVF, bStrided, pVertexData, dwVertexCount) &&
+			DrawUntexturedWithColor(pt, dwFVF, bStrided, pVertexData, dwVertexCount, pIndexData, dwIndexCount, dwFlags, TRUE))
+		{
+			static bool s_bDomeLogged = false;
+			if (!s_bDomeLogged)
+			{
+				s_bDomeLogged = true;
+				Logger::Log(TEXT("Remix: drawing the sky dome with the constant sky texture (%u verts)"), (unsigned)dwVertexCount);
+			}
+			return;
+		}
 		static bool s_bLogged = false;
 		if (!s_bLogged)
 		{
@@ -2113,6 +2126,37 @@ namespace
 }
 
 
+BOOL D2GI::IsDomeShaped(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD dwVertexCount)
+{
+	// The ground plane is flat (one Z, Z is up); the dome spans height.
+	const BYTE* pPos = nullptr;
+	UINT uStride = 0;
+	if (pVertexData == nullptr || dwVertexCount == 0)
+		return FALSE;
+	if (bStrided)
+	{
+		auto* pData = static_cast<D3D7::D3DDRAWPRIMITIVESTRIDEDDATA*>(pVertexData);
+		pPos = static_cast<const BYTE*>(pData->position.lpvData);
+		uStride = pData->position.dwStride;
+	}
+	else
+	{
+		pPos = static_cast<const BYTE*>(pVertexData);
+		uStride = (UINT)CalcFVFStride(dwFVF);
+	}
+	if (pPos == nullptr)
+		return FALSE;
+	float zMin = 1e30f, zMax = -1e30f;
+	for (DWORD v = 0; v < dwVertexCount; v++)
+	{
+		const float z = reinterpret_cast<const float*>(pPos + v * uStride)[2];
+		zMin = std::min(zMin, z);
+		zMax = std::max(zMax, z);
+	}
+	return (zMax - zMin) > 1.0f;
+}
+
+
 BOOL D2GI::IsBackdropDraw(DWORD dwFVF)
 {
 	const bool bScreenSpace = (dwFVF & 0x00E) == 0x004;
@@ -2127,7 +2171,7 @@ BOOL D2GI::IsBackdropDraw(DWORD dwFVF)
 
 
 BOOL D2GI::DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
-	DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags)
+	DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags, BOOL bSkyDome)
 {
 	const bool bScreenSpace = (dwFVF & 0x00E) == 0x004; // XYZRHW: 2D/UI, leave alone
 	const bool bUntextured = m_lpCurrentTextures[0] == nullptr ||
@@ -2144,9 +2188,12 @@ BOOL D2GI::DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL 
 		dwColor = ColorValueToARGB(m_CurrentMaterial.diffuse) & 0xF8F8F8F8;
 	dwColor |= 0xFF000000; // opaque; transparency still comes from blend states
 
-	D3D9::IDirect3DTexture9* pSolid = GetSolidColorTexture(dwColor);
+	// The sky dome gets one constant white texture (Remix hash CD6B1C920D3F662C, listed in rtx.skyBoxTextures)
+	// and keeps its color through the texture stage, so its hash does not change with time of day and weather.
+	D3D9::IDirect3DTexture9* pSolid = GetSolidColorTexture(bSkyDome ? 0xFFFFFFFF : dwColor);
 	if (pSolid == nullptr)
 		return FALSE;
+	const bool bVertexColor = (dwFVF & 0x040) && m_dwDiffuseMaterialSource == D3D9::D3DMCS_COLOR1;
 
 	// Geometry without texture coordinates gets (0,0) for every vertex
 	static const FLOAT s_ZeroUV[2] = { 0.0f, 0.0f };
@@ -2182,8 +2229,20 @@ BOOL D2GI::DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL 
 
 	const DWORD (&s)[2][32] = m_dbgStageState;
 	m_pDev->SetTexture(0, pSolid);
-	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLOROP, D3D9::D3DTOP_SELECTARG1);
-	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG1, D3DTA_TEXTURE);
+	DWORD dwSavedTFactor = 0;
+	if (bSkyDome)
+	{
+		m_pDev->GetRenderState(D3D9::D3DRS_TEXTUREFACTOR, &dwSavedTFactor);
+		m_pDev->SetRenderState(D3D9::D3DRS_TEXTUREFACTOR, dwColor);
+		m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLOROP, D3D9::D3DTOP_MODULATE);
+		m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG1, D3DTA_TEXTURE);
+		m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG2, bVertexColor ? D3DTA_DIFFUSE : D3DTA_TFACTOR);
+	}
+	else
+	{
+		m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLOROP, D3D9::D3DTOP_SELECTARG1);
+		m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG1, D3DTA_TEXTURE);
+	}
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAOP, D3D9::D3DTOP_SELECTARG1);
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_TEXCOORDINDEX, 0);
@@ -2201,6 +2260,11 @@ BOOL D2GI::DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL 
 	m_pDev->SetTexture(0, pSavedTex0 != nullptr ? pSavedTex0->GetD3D9Texture() : nullptr);
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLOROP, s[0][D3D7::D3DTSS_COLOROP]);
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG1, s[0][D3D7::D3DTSS_COLORARG1]);
+	if (bSkyDome)
+	{
+		m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG2, s[0][D3D7::D3DTSS_COLORARG2]);
+		m_pDev->SetRenderState(D3D9::D3DRS_TEXTUREFACTOR, dwSavedTFactor);
+	}
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAOP, s[0][D3D7::D3DTSS_ALPHAOP]);
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAARG1, s[0][D3D7::D3DTSS_ALPHAARG1]);
 	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_TEXCOORDINDEX, s[0][D3D7::D3DTSS_TEXCOORDINDEX]);
