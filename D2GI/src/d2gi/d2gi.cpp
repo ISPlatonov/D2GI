@@ -2569,14 +2569,15 @@ VOID D2GI::SetRemixHeadlights(const FLOAT* v)
 
 	// Remix ignores the diffuse level here: with constant attenuation it converts a D3D light into a light whose
 	// intensity grows with Range^2 (times rtx.lightConversionIntensityFactor). So the strength drives the range:
-	// 100 = range 250 for the low beam (400 burnt out cars near the truck), x1.6 for the high beam.
+	// 100 = range 600 for the low beam, 900 for the high beam (250 was barely visible from the cab once
+	// rtx.numFramesToKeepLights stopped Remix from keeping 100 frames of old copies of the moving beams).
 	const float s = D2GIConfig::RemixHeadlights() / 100.0f;
 	D3D9::D3DLIGHT9 L = {};
 	L.Type = D3D9::D3DLIGHT_SPOT;
 	L.Diffuse = { 1.0f, 0.95f, 0.85f, 1.0f };
 	L.Specular = L.Diffuse;
 	L.Direction = { dir[0], dir[1], dir[2] };
-	L.Range = (bHigh ? 400.0f : 250.0f) * std::sqrt(s);
+	L.Range = (bHigh ? 900.0f : 600.0f) * std::sqrt(s);
 	L.Falloff = 1.0f;
 	L.Attenuation0 = 1.0f;
 	L.Theta = bHigh ? 0.25f : 0.4f;  // full-brightness cone
