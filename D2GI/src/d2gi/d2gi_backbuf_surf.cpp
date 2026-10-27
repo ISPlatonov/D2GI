@@ -4,7 +4,6 @@
 #include "d2gi_backbuf_surf.h"
 #include "d2gi.h"
 #include "d2gi_enums.h"
-#include "d2gi_create_lock.h"
 
 
 D2GIBackBufferSurface::D2GIBackBufferSurface(D2GI* pD2GI, DWORD dwWidth, 
@@ -36,8 +35,6 @@ void D2GIBackBufferSurface::LoadResource(bool bResettingDevice)
 {
 	auto device = GetD3D9Device();
 
-	std::lock_guard<std::recursive_mutex> createLock1(D2GICreateLock());
-
 	if (FAILED(device->CreateTexture(m_dwWidth, m_dwHeight, 1, D3DUSAGE_DYNAMIC,
 	                                 g_asD2GIPF_To_D3D9PF[m_eD2GIPixelFormat], D3D9::D3DPOOL_DEFAULT,
 	                                 &writing_texture_, nullptr))) {
@@ -47,15 +44,12 @@ void D2GIBackBufferSurface::LoadResource(bool bResettingDevice)
 	if (FAILED(writing_texture_->GetSurfaceLevel(0, &writing_surface_)))
 		Logger::Error(T("Failed to get backbuffer writing surface"));
 
-	std::lock_guard<std::recursive_mutex> createLock2(D2GICreateLock());
-
 	if (FAILED(device->CreateRenderTarget(m_dwWidth, m_dwHeight, g_asD2GIPF_To_D3D9PF[m_eD2GIPixelFormat],
 	                                      D3D9::D3DMULTISAMPLE_NONE, 0, FALSE, &reading_surface_, nullptr))) {
 		Logger::Error(T("Failed to create backbuffer reading render target"));
 	}
 
 	if (intermediate_surface_ == nullptr) {
-		std::lock_guard<std::recursive_mutex> createLock3(D2GICreateLock());
 		if (FAILED(device->CreateOffscreenPlainSurface(m_dwWidth, m_dwHeight,
 		                                               g_asD2GIPF_To_D3D9PF[m_eD2GIPixelFormat],
 		                                               D3D9::D3DPOOL_SYSTEMMEM, &intermediate_surface_, nullptr))) {

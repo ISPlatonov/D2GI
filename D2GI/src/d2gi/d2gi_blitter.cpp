@@ -8,7 +8,6 @@
 
 #include "shaders/d2gi_blitter_vs.h"
 #include "shaders/d2gi_blitter_ps.h"
-#include "d2gi_create_lock.h"
 
 
 using namespace D3D9;
@@ -58,8 +57,6 @@ void D2GIBlitter::LoadResource(bool bResettingDevice)
 
 		0.5f, -0.5f,  1.0f, 1.0f,
 	};
-
-	std::lock_guard<std::recursive_mutex> createLock1(D2GICreateLock());
 
 	if (FAILED(pDev->CreateVertexBuffer(sizeof(afVerts), D3DUSAGE_WRITEONLY, 0, D3DPOOL_DEFAULT, &m_pVB, NULL)))
 		Logger::Error(TEXT("Failed to create blitter vertex buffer"));

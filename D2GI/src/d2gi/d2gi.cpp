@@ -25,7 +25,6 @@
 
 #define XXH_INLINE_ALL
 #include "../thirdparty/xxhash/xxhash.h"
-#include "d2gi_create_lock.h"
 
 #include <shlwapi.h>
 #include <windowsx.h>
@@ -345,8 +344,6 @@ VOID D2GI::ResetD3D9Device()
 		}
 	}
 
-	std::lock_guard<std::recursive_mutex> createLock1(D2GICreateLock());
-
 	if (FAILED(m_pDev->CreateTexture(sParams.BackBufferWidth, sParams.BackBufferHeight, 1, D3DUSAGE_RENDERTARGET,
 		sParams.BackBufferFormat, D3D9::D3DPOOL_DEFAULT, &m_pBackBufferCopy, NULL)))
 		Logger::Error(TEXT("Failed to create backbuffer copy texture"));
@@ -356,7 +353,6 @@ VOID D2GI::ResetD3D9Device()
 
 	if (MSAAToUse != D3D9::D3DMULTISAMPLE_NONE)
 	{
-		std::lock_guard<std::recursive_mutex> createLock2(D2GICreateLock());
 		if (SUCCEEDED(m_pDev->CreateRenderTarget(sParams.BackBufferWidth, sParams.BackBufferHeight, sParams.BackBufferFormat, MSAAToUse, 0, FALSE, &m_pMSAASurf, nullptr)))
 		{
 			m_pDev->SetRenderState(D3D9::D3DRS_MULTISAMPLEANTIALIAS, TRUE);
@@ -368,8 +364,6 @@ VOID D2GI::ResetD3D9Device()
 			Logger::Error(TEXT("Failed to create the MSAA surface"));
 		}
 	}
-
-	std::lock_guard<std::recursive_mutex> createLock3(D2GICreateLock());
 
 	if (SUCCEEDED(m_pDev->CreateDepthStencilSurface(sParams.BackBufferWidth, sParams.BackBufferHeight, D3D9::D3DFMT_D24X8, MSAAToUse, 0, TRUE, &m_pDepthStencilSurf, nullptr)))
 	{
@@ -2018,7 +2012,6 @@ D3D9::IDirect3DTexture9* D2GI::GetSolidColorTexture(DWORD dwColor)
 		return it->second.Get();
 
 	Microsoft::WRL::ComPtr<D3D9::IDirect3DTexture9> pTex;
-	std::lock_guard<std::recursive_mutex> createLock4(D2GICreateLock());
 	if (FAILED(m_pDev->CreateTexture(1, 1, 1, 0, D3D9::D3DFMT_A8R8G8B8, D3D9::D3DPOOL_MANAGED, pTex.GetAddressOf(), nullptr)))
 		return nullptr;
 
@@ -2216,7 +2209,6 @@ VOID D2GI::FillStaticBlitTexture(D2GITexture* pDst)
 	if (it == m_StaticBlitSources.end())
 	{
 		Microsoft::WRL::ComPtr<D3D9::IDirect3DSurface9> pSrc;
-		std::lock_guard<std::recursive_mutex> createLock5(D2GICreateLock());
 		if (FAILED(m_pDev->CreateOffscreenPlainSurface(desc.Width, desc.Height, desc.Format, D3D9::D3DPOOL_SYSTEMMEM, pSrc.GetAddressOf(), nullptr)))
 			return;
 

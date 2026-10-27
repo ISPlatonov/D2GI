@@ -2,7 +2,6 @@
 #include "../common/logger.h"
 
 #include "d2gi.h"
-#include "d2gi_create_lock.h"
 #include "d2gi_sysmem_surf.h"
 #include "d2gi_enums.h"
 
@@ -149,13 +148,7 @@ void D2GISystemMemorySurface::EnsureD3DResourceCreated()
 
 	D2GISurface::EnsureD3DResourceCreated();
 
-	std::lock_guard<std::recursive_mutex> lock(D2GICreateLock());
-	HRESULT hr = GetD3D9Device()->CreateOffscreenPlainSurface(m_dwWidth, m_dwHeight, GetEffectiveD3DFormat(), D3D9::D3DPOOL_SYSTEMMEM, m_systemMemSurface.GetAddressOf(), nullptr);
-	for (int nRetry = 0; FAILED(hr) && nRetry < 3; nRetry++)
-	{
-		Sleep(50);
-		hr = GetD3D9Device()->CreateOffscreenPlainSurface(m_dwWidth, m_dwHeight, GetEffectiveD3DFormat(), D3D9::D3DPOOL_SYSTEMMEM, m_systemMemSurface.GetAddressOf(), nullptr);
-	}
+	const HRESULT hr = GetD3D9Device()->CreateOffscreenPlainSurface(m_dwWidth, m_dwHeight, GetEffectiveD3DFormat(), D3D9::D3DPOOL_SYSTEMMEM, m_systemMemSurface.GetAddressOf(), nullptr);
 	if (FAILED(hr))
 	{
 		MEMORYSTATUSEX ms = { sizeof(ms) };
@@ -173,7 +166,6 @@ void D2GISystemMemorySurface::FlushResourceToGPU()
 	D3D9::IDirect3DDevice9* pDev = GetD3D9Device();
 	if (!m_backingGPUTexture)
 	{
-		std::lock_guard<std::recursive_mutex> createLock1(D2GICreateLock());
 		if (FAILED(pDev->CreateTexture(m_dwWidth, m_dwHeight,
 			1, D3DUSAGE_DYNAMIC,
 			GetEffectiveD3DFormat(), D3D9::D3DPOOL_DEFAULT, m_backingGPUTexture.ReleaseAndGetAddressOf(), nullptr)))

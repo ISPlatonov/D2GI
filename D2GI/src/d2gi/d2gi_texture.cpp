@@ -7,7 +7,6 @@
 #include "d2gi_enums.h"
 #include "d2gi_sysmem_surf.h"
 #include "d2gi.h"
-#include "d2gi_create_lock.h"
 
 #include <d3dcommon.h>
 
@@ -155,13 +154,7 @@ void D2GITexture::EnsureD3DResourceCreated()
 		Pool = D3D9::D3DPOOL_MANAGED;
 	}
 
-	std::lock_guard<std::recursive_mutex> lock(D2GICreateLock());
 	HRESULT hr = pDev->CreateTexture(m_dwWidth, m_dwHeight, m_dwMipMapCount, Usage, eFormat, Pool, &m_pTexture, nullptr);
-	for (int nRetry = 0; FAILED(hr) && nRetry < 3; nRetry++)
-	{
-		Sleep(50);
-		hr = pDev->CreateTexture(m_dwWidth, m_dwHeight, m_dwMipMapCount, Usage, eFormat, Pool, &m_pTexture, nullptr);
-	}
 	if (FAILED(hr))
 	{
 		// Usually the 32-bit address space is full (king.exe is not large-address-aware, and the

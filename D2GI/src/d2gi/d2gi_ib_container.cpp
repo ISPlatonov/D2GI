@@ -1,7 +1,6 @@
 
 #include "../common/logger.h"
 #include "d2gi_ib_container.h"
-#include "d2gi_create_lock.h"
 
 #include <algorithm>
 
@@ -11,8 +10,6 @@ void D2GIIndexBufferContainer::AllocNewBuffer(UINT uRequiredSize)
 {
 	uRequiredSize = std::max(uRequiredSize, DEFAULT_IB_SIZE);
 	D3D9::IDirect3DDevice9* pDev = GetD3D9Device();
-
-	std::lock_guard<std::recursive_mutex> createLock1(D2GICreateLock());
 
 	if (FAILED(pDev->CreateIndexBuffer(uRequiredSize, D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY,
 		D3D9::D3DFMT_INDEX16, D3D9::D3DPOOL_DEFAULT, &m_pBuffer, nullptr)))
