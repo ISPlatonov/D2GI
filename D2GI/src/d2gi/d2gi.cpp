@@ -2457,11 +2457,72 @@ VOID D2GI::SetRemixSun()
 // road ahead is dark at night. From the driver's view (pribor.txr drawn in the previous frame) and when the fog
 // says it is dark, put two spot lights in front of the camera. The world camera is the view matrix the game sets
 // for the world (row vectors: p_view = p_world * R + t), so the camera axes in world space are the rows of R^-1.
+// The player's headlight switch, read from king.exe 8.1 (Steam, PE timestamp 0x400502EA):
+// player vehicle = *(*(0x6D2078) + 0x268); vehicle+0x51B8 = 0 off, 1 low beam, 2 high beam (L / Shift+L,
+// see the key handler at 0x597D36); vehicle+0x51B4 = automatic lights the game sets by the hour (0x55057A).
+// Returns -1 when the game version is unknown or the vehicle is not there (menus, loading).
+static int ReadGameDword(DWORD dwAddr, DWORD* pOut)
+{
+	__try
+	{
+		*pOut = *reinterpret_cast<volatile DWORD*>(dwAddr);
+		return 1;
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return 0;
+	}
+}
+
+static int ReadPlayerHeadlightSwitch(DWORD* pAuto)
+{
+	static int s_iKnownExe = -1;
+	if (s_iKnownExe < 0)
+	{
+		const BYTE* pBase = reinterpret_cast<const BYTE*>(GetModuleHandle(nullptr));
+		const IMAGE_NT_HEADERS* pNt = reinterpret_cast<const IMAGE_NT_HEADERS*>(
+			pBase + reinterpret_cast<const IMAGE_DOS_HEADER*>(pBase)->e_lfanew);
+		s_iKnownExe = (pBase == reinterpret_cast<const BYTE*>(0x400000) &&
+			pNt->FileHeader.TimeDateStamp == 0x400502EA) ? 1 : 0;
+		Logger::Log(TEXT("Remix: headlight switch %s"), s_iKnownExe ? TEXT("read from king.exe 8.1")
+			: TEXT("unknown for this king.exe; Headlights follow the time of day"));
+	}
+	if (!s_iKnownExe)
+		return -1;
+
+	DWORD dwGame = 0, dwVeh = 0, dwSwitch = 0;
+	if (!ReadGameDword(0x6D2078, &dwGame) || dwGame < 0x10000)
+		return -1;
+	if (!ReadGameDword(dwGame + 0x268, &dwVeh) || dwVeh < 0x10000)
+		return -1;
+	if (!ReadGameDword(dwVeh + 0x51B8, &dwSwitch) || dwSwitch > 2)
+		return -1;
+	if (pAuto != nullptr && !ReadGameDword(dwVeh + 0x51B4, pAuto))
+		*pAuto = 0;
+	return (int)dwSwitch;
+}
+
+
 VOID D2GI::SetRemixHeadlights(const FLOAT* v)
 {
 	m_bHeadlightsSetThisFrame = true;
 
-	const bool bOn = m_bLastFrameCab && NightFactor() < 0.35f;
+	DWORD dwAuto = 0;
+	const int iSwitch = ReadPlayerHeadlightSwitch(&dwAuto);
+	static int s_iLoggedSwitch = -2;
+	static DWORD s_dwLoggedAuto = 0xFFFFFFFF;
+	static int s_nSwitchLogs = 0;
+	if ((iSwitch != s_iLoggedSwitch || dwAuto != s_dwLoggedAuto) && s_nSwitchLogs < 50)
+	{
+		s_iLoggedSwitch = iSwitch;
+		s_dwLoggedAuto = dwAuto;
+		s_nSwitchLogs++;
+		Logger::Log(TEXT("Remix: player headlight switch %d (auto %u)"), iSwitch, (unsigned)dwAuto);
+	}
+	// Unknown exe: fall back to "on when dark"
+	const bool bSwitchOn = iSwitch < 0 ? NightFactor() < 0.35f : iSwitch > 0;
+	const bool bHigh = iSwitch == 2;
+	const bool bOn = m_bLastFrameCab && bSwitchOn;
 	if (!bOn)
 	{
 		if (m_bHeadlightsOn)
@@ -2501,24 +2562,25 @@ VOID D2GI::SetRemixHeadlights(const FLOAT* v)
 	};
 	norm(right); norm(up); norm(fwd);
 
-	// Beam: forward, tilted slightly down
-	float dir[3] = { fwd[0] - up[0] * 0.12f, fwd[1] - up[1] * 0.12f, fwd[2] - up[2] * 0.12f };
+	// Beam: low beam tilted down, high beam almost level
+	const float tilt = bHigh ? 0.03f : 0.15f;
+	float dir[3] = { fwd[0] - up[0] * tilt, fwd[1] - up[1] * tilt, fwd[2] - up[2] * tilt };
 	norm(dir);
 
 	// Remix ignores the diffuse level here: with constant attenuation it converts a D3D light into a light whose
 	// intensity grows with Range^2 (times rtx.lightConversionIntensityFactor). So the strength drives the range:
-	// 100 = range 400 (lights the road ahead; 120 was barely visible), intensity ~ Headlights.
+	// 100 = range 250 for the low beam (400 burnt out cars near the truck), x1.6 for the high beam.
 	const float s = D2GIConfig::RemixHeadlights() / 100.0f;
 	D3D9::D3DLIGHT9 L = {};
 	L.Type = D3D9::D3DLIGHT_SPOT;
 	L.Diffuse = { 1.0f, 0.95f, 0.85f, 1.0f };
 	L.Specular = L.Diffuse;
 	L.Direction = { dir[0], dir[1], dir[2] };
-	L.Range = 400.0f * std::sqrt(s);
+	L.Range = (bHigh ? 400.0f : 250.0f) * std::sqrt(s);
 	L.Falloff = 1.0f;
 	L.Attenuation0 = 1.0f;
-	L.Theta = 0.35f;
-	L.Phi = 0.9f;
+	L.Theta = bHigh ? 0.25f : 0.4f;  // full-brightness cone
+	L.Phi = bHigh ? 0.5f : 0.8f;     // outer cone
 
 	// Headlamps: in front of the hood (~4.5 units ahead of the driver's eye, ~2 below it, ~0.9 to each side),
 	// so the beams do not light the hood itself
