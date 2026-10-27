@@ -113,6 +113,9 @@ class D2GI
 	FILE* m_pRemixLog = nullptr;
 	std::unordered_set<std::string> m_dbgSeenDraws;
 	uint32_t m_dbgDrawCounter = 0;
+	DWORD m_dwFogColor = 0;            // last D3DRENDERSTATE_FOGCOLOR, follows time of day and weather
+	bool  m_bSunSetThisFrame = false;
+	VOID SetRemixSun();
 	uint32_t m_dbg3DFrame = 0;      // 3D frames presented, for the frame-order dump
 	uint32_t m_dbgFrameDraw = 0;    // draw index inside the current frame
 
