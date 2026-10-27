@@ -26,6 +26,9 @@
 #define XXH_INLINE_ALL
 #include "../thirdparty/xxhash/xxhash.h"
 
+// Light slot reserved for the Remix sun (SunStrength); the game itself was seen using slots 0-1 and 9-10.
+static const DWORD REMIX_SUN_LIGHT_INDEX = 7;
+
 #include <shlwapi.h>
 #include <windowsx.h>
 
@@ -433,6 +436,7 @@ void D2GI::OnFlip()
 
 		BlitToBackbufferAndPresent(nullptr, backbuffer_texture, nullptr);
 	} else if (m_eRenderState == RS_BACKBUFFER_BLITTING || m_eRenderState == RS_3D_RENDERING) {
+		m_bSunSetThisFrame = false;
 		if (D2GIConfig::RemixDebugDrawsEnabled())
 		{
 			m_dbg3DFrame++;
@@ -492,6 +496,8 @@ VOID D2GI::OnClear(DWORD dwCount, D3D7::LPD3DRECT pRects, DWORD dwFlags, D3D7::D
 
 VOID D2GI::OnLightEnable(DWORD i, BOOL bEnable)
 {
+	if (D2GIConfig::RemixSunStrength() > 0 && i == REMIX_SUN_LIGHT_INDEX)
+		return;
 	if (D2GIConfig::RemixDebugDrawsEnabled())
 	{
 		static int s_nLogged = 0;
@@ -720,6 +726,7 @@ VOID D2GI::OnRenderStateSet(D3D7::D3DRENDERSTATETYPE eState, DWORD dwValue)
 			m_pDev->SetRenderState(D3D9::D3DRS_FOGENABLE, dwValue);
 			break;
 		case D3D7::D3DRENDERSTATE_FOGCOLOR:
+			m_dwFogColor = dwValue;
 			m_pDev->SetRenderState(D3D9::D3DRS_FOGCOLOR, dwValue);
 			break;
 		case D3D7::D3DRENDERSTATE_FOGVERTEXMODE:
@@ -976,6 +983,16 @@ VOID D2GI::OnTransformSet(D3D7::D3DTRANSFORMSTATETYPE eType, D3D7::D3DMATRIX* pM
 
 VOID D2GI::OnLightSet(DWORD i, D3D7::LPD3DLIGHT7 pLight)
 {
+	if (D2GIConfig::RemixSunStrength() > 0 && i == REMIX_SUN_LIGHT_INDEX)
+	{
+		static bool s_bLogged = false;
+		if (!s_bLogged)
+		{
+			s_bLogged = true;
+			Logger::Log(TEXT("Remix: the game uses light %u, which SunStrength reserves for the sun; ignoring it"), (unsigned)i);
+		}
+		return;
+	}
 	// DebugDraws: log the game's fixed-function lights (RTX Remix converts them into its own lights).
 	// Log a light index again only when its type changes, at most 300 lines.
 	if (D2GIConfig::RemixDebugDrawsEnabled() && pLight != nullptr)
@@ -1299,6 +1316,9 @@ VOID D2GI::MaybeEmitCabRain()
 VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
 	DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags)
 {
+	if (D2GIConfig::RemixSunStrength() > 0 && !m_bSunSetThisFrame)
+		SetRemixSun();
+
 	m_eRenderState = RS_3D_RENDERING;
 
 	if (D2GIConfig::RemixDebugDrawsEnabled() && !m_bInUntexturedFix)
@@ -2231,4 +2251,44 @@ VOID D2GI::FillStaticBlitTexture(D2GITexture* pDst)
 	}
 
 	m_pDev->UpdateSurface(it->second.Get(), nullptr, pDstSurf, nullptr);
+}
+
+
+// ======= Remix: a sun that follows the game's time of day and weather =======
+// The game has no sun light: daylight is ambient and vertex color, so under Remix the world is lit by the sky
+// only. The fog color follows time of day and weather (WEATHER.INI fog_* tables: ~255 255 230 on a good day,
+// ~84 80 76 on a bad day, ~40 81 102 / 17 22 25 at night), so it drives a directional light that RTX Remix turns
+// into a distant light: color = fog color normalized, brightness = SunStrength% * luminance^2.
+VOID D2GI::SetRemixSun()
+{
+	m_bSunSetThisFrame = true;
+
+	const float r = ((m_dwFogColor >> 16) & 0xFF) / 255.0f;
+	const float g = ((m_dwFogColor >> 8) & 0xFF) / 255.0f;
+	const float b = (m_dwFogColor & 0xFF) / 255.0f;
+	const float lum = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+	const float maxc = std::max(r, std::max(g, b));
+	const float k = (maxc > 0.0f ? 1.0f / maxc : 0.0f) * lum * lum * (D2GIConfig::RemixSunStrength() / 100.0f);
+
+	D3D9::D3DLIGHT9 sun = {};
+	sun.Type = D3D9::D3DLIGHT_DIRECTIONAL;
+	sun.Diffuse = { r * k, g * k, b * k, 1.0f };
+	sun.Specular = sun.Diffuse;
+	// Z is up in this game (road ~20, lamps ~50). Sun from the side, ~55 degrees above the horizon.
+	const float dx = 0.45f, dy = 0.35f, dz = -0.82f;
+	const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
+	sun.Direction = { dx / len, dy / len, dz / len };
+	sun.Range = 10000.0f;
+	m_pDev->SetLight(REMIX_SUN_LIGHT_INDEX, &sun);
+	m_pDev->LightEnable(REMIX_SUN_LIGHT_INDEX, TRUE);
+
+	static DWORD s_dwLoggedFog = 0xFFFFFFFF;
+	static int s_nLogged = 0;
+	if (m_dwFogColor != s_dwLoggedFog && s_nLogged < 30)
+	{
+		s_dwLoggedFog = m_dwFogColor;
+		s_nLogged++;
+		Logger::Log(TEXT("Remix: sun from fog 0x%06X -> (%.2f %.2f %.2f)"), (unsigned)(m_dwFogColor & 0xFFFFFF),
+			sun.Diffuse.r, sun.Diffuse.g, sun.Diffuse.b);
+	}
 }
