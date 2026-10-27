@@ -29,7 +29,8 @@ From `d2gi_remix.log` (`DebugDraws=1`, which logs each texture's Remix hash). "-
 | ignore | 3A19562A44B7363F | `common_SizeLight.txr` (car marker lights) |
 | ignore | BEFFC37EB6A2C999 | `shadtree0.txr` (tree shadow) |
 | ignore | C87C1EE3BD5D7699 | `effect_Shadow.txr` (car shadow) |
-| ignore | 093C29F27ECFCF21, 0CF746564CAA68E7, 9F87AA1947B96BA8, D20CFD7A101BEE13 | - |
+| ignore | 093C29F27ECFCF21, 0CF746564CAA68E7, 9F87AA1947B96BA8 | - |
+| particle + light | D20CFD7A101BEE13 | `lg_head.txr` (headlight glow; also `rtx.lightConverter`, so every car's headlight is a small sphere light) |
 | particle | 527CD12D15C474E6, 63347F47085C30A8 | `tlglyel.txr`, `tlglgre.txr` (traffic-light glows) |
 | particle | 6BE094792FAFF45C | `shadtree1.txr` |
 | particle | 71344BA732B735D4 | `lg_stop.txr` (brake-light glow) |
