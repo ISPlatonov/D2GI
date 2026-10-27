@@ -1,6 +1,7 @@
 
 #include "../common/logger.h"
 #include "d2gi_vb_container.h"
+#include "d2gi_create_lock.h"
 
 #include <algorithm>
 
@@ -10,6 +11,8 @@ void D2GIVertexBufferContainer::AllocNewBuffer(UINT uRequiredSize)
 {
 	uRequiredSize = std::max(uRequiredSize, DEFAULT_VB_SIZE);
 	D3D9::IDirect3DDevice9* pDev = GetD3D9Device();
+
+	std::lock_guard<std::recursive_mutex> createLock1(D2GICreateLock());
 
 	if (FAILED(pDev->CreateVertexBuffer(uRequiredSize, D3DUSAGE_DYNAMIC | D3DUSAGE_WRITEONLY,
 		0, D3D9::D3DPOOL_DEFAULT, &m_pBuffer, nullptr)))

@@ -21,6 +21,7 @@
 using namespace D3D9;
 
 #include "ScreenGrab/ScreenGrab9.h"
+#include "d2gi_create_lock.h"
 #include <wincodec.h>
 
 #include <wrl/client.h>
@@ -185,6 +186,7 @@ void __cdecl D2GIHookInjector::WriteScreenshotFunc(void *a2)
 	ComPtr<D3D9::IDirect3DSurface9> buffer;
 	if ((desc.Usage & D3DUSAGE_RENDERTARGET) != 0)
 	{
+		std::lock_guard<std::recursive_mutex> createLock1(D2GICreateLock());
 		if (FAILED(device->CreateOffscreenPlainSurface(desc.Width, desc.Height, desc.Format, D3D9::D3DPOOL_SYSTEMMEM, buffer.GetAddressOf(), nullptr)))
 		{
 			return;

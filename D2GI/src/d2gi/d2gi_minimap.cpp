@@ -7,6 +7,7 @@
 #include "shaders/d2gi_minimap_vs.h"
 
 #include "DirectXMath.h"
+#include "d2gi_create_lock.h"
 
 using namespace D3D9;
 
@@ -32,6 +33,8 @@ void D2GIMinimapRenderer::LoadResources(bool bResettingDevice)
 		if (FAILED(pDev->CreatePixelShader(reinterpret_cast<const DWORD*>(g_MinimapPS), &m_PS)))
 			Logger::Error(TEXT("Failed to create minimap pixel shader"));
 	}
+
+	std::lock_guard<std::recursive_mutex> createLock1(D2GICreateLock());
 
 	if (FAILED(pDev->CreateVertexBuffer(MAX_NUM_VERTICES * sizeof(*m_LockedVertexData), D3DUSAGE_DYNAMIC|D3DUSAGE_WRITEONLY, 0, D3DPOOL_DEFAULT, &m_VB, nullptr)))
 		Logger::Error(TEXT("Failed to create minimap vertex buffer"));
