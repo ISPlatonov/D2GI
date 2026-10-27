@@ -45,7 +45,11 @@ $size = (Get-ChildItem $Stage -Recurse -Force -File | Measure-Object Length -Sum
 Say ("Папка для Workshop готова: {0} ({1:N0} МБ), версия {2}" -f $Stage, $size, $version) Green
 if (Test-Path (Join-Path $Stage '.workshop_id')) { Say 'Публикация обновит уже существующий мод в Workshop.' }
 
+# The uploader must NOT get --folder: with it, it treats that folder as its own config folder and writes a
+# default workshop.cfg (logging off, no local mod folder) into the mod, which would then be published and
+# overwrite the player's workshop.cfg. Start it plain and pick the folder with Browse.
+Get-ChildItem $Stage -Filter 'workshop.cfg' -File -ErrorAction SilentlyContinue | Remove-Item -Force
 if (Test-Path $Uploader) {
-    Start-Process -FilePath $Uploader -ArgumentList @('--folder', "`"$Stage`"") -WorkingDirectory $GameDir
-    Say 'Открываю загрузчик. Если папка не выбралась сама: Browse -> _workshop_stage. Потом Publish.' Green
+    Start-Process -FilePath $Uploader -WorkingDirectory $GameDir
+    Say 'Открываю загрузчик: Browse -> папка игры -> _workshop_stage, потом Update (или Publish).' Green
 }

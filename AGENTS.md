@@ -48,6 +48,10 @@ The game has an official uploader (`Workshop Uploader GUI - Hard Truck 2.exe`) a
 `RTX-Workshop.cmd` builds `<game>\_workshop_stage` from the installed build plus the RTX Remix runtime and opens the
 uploader. The owner presses Publish (it is their Steam account; never publish or change visibility without asking).
 The uploader warns about every .exe/.dll (43 warnings): that is expected, 0 errors means it can be published.
+Never start the uploader with `--folder`: it then writes a default `workshop.cfg` into that folder, which would be
+published and overwrite players' `workshop.cfg`. Its folder field is read-only; use Browse (a folder tree dialog:
+double-click to expand, click the folder, OK). With computer use the uploader window is granted and usable.
+The item is `3828304518` (friends only); `_workshop_stage\.workshop_id` keeps it, so the button says Update.
 Priorities: Workshop item -5 (wins over D2GI / Modern Patch at 0), local test folder `_rtx_remix_mod` -10 (wins over
 the Workshop item, so test builds still apply).
 
