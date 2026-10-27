@@ -22,6 +22,9 @@
 #include <cmath>
 #include <string>
 
+#define XXH_INLINE_ALL
+#include "../thirdparty/xxhash/xxhash.h"
+
 #include <shlwapi.h>
 #include <windowsx.h>
 
@@ -1541,6 +1544,51 @@ namespace
 		return buf;
 	}
 
+	UINT BytesPerPixel(D3D9::D3DFORMAT f)
+	{
+		switch (f)
+		{
+		case D3D9::D3DFMT_A8R8G8B8: case D3D9::D3DFMT_X8R8G8B8: return 4;
+		case D3D9::D3DFMT_R8G8B8: return 3;
+		case D3D9::D3DFMT_R5G6B5: case D3D9::D3DFMT_X1R5G5B5: case D3D9::D3DFMT_A1R5G5B5:
+		case D3D9::D3DFMT_A4R4G4B4: case D3D9::D3DFMT_X4R4G4B4: return 2;
+		case D3D9::D3DFMT_P8: case D3D9::D3DFMT_L8: case D3D9::D3DFMT_A8: return 1;
+		default: return 0;
+		}
+	}
+
+	// The hash RTX Remix shows for this texture: XXH3_64 of mip level 0, rows packed tightly
+	// (dxvk-remix D3D9CommonTexture::SetupForRtxFrom). Remix hashes on first upload, so this
+	// matches as long as the game has not rewritten the texture since.
+	std::string RemixTextureHash(D2GITexture* pTex)
+	{
+		if (pTex == nullptr)
+			return "-";
+		D3D9::IDirect3DTexture9* pD3DTex = pTex->GetD3D9Texture();
+		if (pD3DTex == nullptr)
+			return "?";
+		D3D9::D3DSURFACE_DESC desc;
+		if (FAILED(pD3DTex->GetLevelDesc(0, &desc)))
+			return "?";
+		const UINT bpp = BytesPerPixel(desc.Format);
+		if (bpp == 0)
+			return "fmt?";
+		D3D9::D3DLOCKED_RECT lr;
+		if (FAILED(pD3DTex->LockRect(0, &lr, nullptr, D3DLOCK_READONLY)))
+			return "locked?";
+		const size_t row = (size_t)desc.Width * bpp;
+		XXH3_state_t* st = XXH3_createState();
+		XXH3_64bits_reset(st);
+		for (UINT y = 0; y < desc.Height; y++)
+			XXH3_64bits_update(st, static_cast<const BYTE*>(lr.pBits) + (size_t)y * lr.Pitch, row);
+		const XXH64_hash_t h = XXH3_64bits_digest(st);
+		XXH3_freeState(st);
+		pD3DTex->UnlockRect(0);
+		char buf[24];
+		sprintf_s(buf, "%016llX", (unsigned long long)h);
+		return buf;
+	}
+
 	std::string DescribeUV(const UVRange& r)
 	{
 		if (!r.valid)
@@ -1596,6 +1644,7 @@ VOID D2GI::RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrid
 	fprintf(m_pRemixLog, "#%u draw%u verts%u idx%u %s\n    uv0 %s\n    uv1 %s\n",
 		(unsigned)m_dbgSeenDraws.size(), m_dbgDrawCounter, (unsigned)dwVertexCount, (unsigned)dwIndexCount, szKey,
 		DescribeUV(uv0).c_str(), DescribeUV(uv1).c_str());
+	fprintf(m_pRemixLog, "    remix hash t0 %s t1 %s\n", RemixTextureHash(pTex0).c_str(), RemixTextureHash(pTex1).c_str());
 
 	{
 		// Position bounding box and material color, to find big flat surfaces like ground
