@@ -62,6 +62,11 @@ focus the game later, click its window. Never use open_application on the game.
 - `d2gi.log`: the last `Remix options:` line shows the expected switches; look for your one-time `Remix: ...` notice.
 - `rtx-remix/logs/remix-dxvk.log`: no new errors; `crash-upload.log` not updated.
 - In game: drive to the situation (rain, night, cab view) and take a screenshot. Compare with the PR's test plan.
+  - **Rain on demand:** main menu → «Игра» → in «Новая игра» move the «Погода» slider (cloud icon on the left, sun on
+    the right) all the way left; the tooltip says «погода: дождливая». Then «Новая игра». Leaving a running game:
+    Esc → «Главное меню» → «Не сохранять» (do not overwrite the owner's saves).
+  - The game cursor follows the OS mouse. The Claude desktop window can sit over the right-hand menu buttons and is
+    hidden in screenshots, so clicks there land in it. If a click on «Игра» does nothing, ask the owner to minimize it.
   If you cannot see the screen, ask the owner for a screenshot and say exactly what to look at.
 
 Report in one or two lines what you saw. Then tick the PR test plan and update `docs/REMIX_BACKLOG.md`.
