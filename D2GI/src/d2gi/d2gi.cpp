@@ -22,6 +22,9 @@
 #include <cmath>
 #include <string>
 
+#define XXH_INLINE_ALL
+#include "../thirdparty/xxhash/xxhash.h"
+
 #include <shlwapi.h>
 #include <windowsx.h>
 
@@ -1541,6 +1544,51 @@ namespace
 		return buf;
 	}
 
+	UINT BytesPerPixel(D3D9::D3DFORMAT f)
+	{
+		switch (f)
+		{
+		case D3D9::D3DFMT_A8R8G8B8: case D3D9::D3DFMT_X8R8G8B8: return 4;
+		case D3D9::D3DFMT_R8G8B8: return 3;
+		case D3D9::D3DFMT_R5G6B5: case D3D9::D3DFMT_X1R5G5B5: case D3D9::D3DFMT_A1R5G5B5:
+		case D3D9::D3DFMT_A4R4G4B4: case D3D9::D3DFMT_X4R4G4B4: return 2;
+		case D3D9::D3DFMT_P8: case D3D9::D3DFMT_L8: case D3D9::D3DFMT_A8: return 1;
+		default: return 0;
+		}
+	}
+
+	// The hash RTX Remix shows for this texture: XXH3_64 of mip level 0, rows packed tightly
+	// (dxvk-remix D3D9CommonTexture::SetupForRtxFrom). Remix hashes on first upload, so this
+	// matches as long as the game has not rewritten the texture since.
+	std::string RemixTextureHash(D2GITexture* pTex)
+	{
+		if (pTex == nullptr)
+			return "-";
+		D3D9::IDirect3DTexture9* pD3DTex = pTex->GetD3D9Texture();
+		if (pD3DTex == nullptr)
+			return "?";
+		D3D9::D3DSURFACE_DESC desc;
+		if (FAILED(pD3DTex->GetLevelDesc(0, &desc)))
+			return "?";
+		const UINT bpp = BytesPerPixel(desc.Format);
+		if (bpp == 0)
+			return "fmt?";
+		D3D9::D3DLOCKED_RECT lr;
+		if (FAILED(pD3DTex->LockRect(0, &lr, nullptr, D3DLOCK_READONLY)))
+			return "locked?";
+		const size_t row = (size_t)desc.Width * bpp;
+		XXH3_state_t* st = XXH3_createState();
+		XXH3_64bits_reset(st);
+		for (UINT y = 0; y < desc.Height; y++)
+			XXH3_64bits_update(st, static_cast<const BYTE*>(lr.pBits) + (size_t)y * lr.Pitch, row);
+		const XXH64_hash_t h = XXH3_64bits_digest(st);
+		XXH3_freeState(st);
+		pD3DTex->UnlockRect(0);
+		char buf[24];
+		sprintf_s(buf, "%016llX", (unsigned long long)h);
+		return buf;
+	}
+
 	std::string DescribeUV(const UVRange& r)
 	{
 		if (!r.valid)
@@ -1596,6 +1644,7 @@ VOID D2GI::RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrid
 	fprintf(m_pRemixLog, "#%u draw%u verts%u idx%u %s\n    uv0 %s\n    uv1 %s\n",
 		(unsigned)m_dbgSeenDraws.size(), m_dbgDrawCounter, (unsigned)dwVertexCount, (unsigned)dwIndexCount, szKey,
 		DescribeUV(uv0).c_str(), DescribeUV(uv1).c_str());
+	fprintf(m_pRemixLog, "    remix hash t0 %s t1 %s\n", RemixTextureHash(pTex0).c_str(), RemixTextureHash(pTex1).c_str());
 
 	{
 		// Position bounding box and material color, to find big flat surfaces like ground
@@ -1622,6 +1671,61 @@ VOID D2GI::RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrid
 				for (int k = 0; k < 3; k++) { mn[k] = std::min(mn[k], p[k]); mx[k] = std::max(mx[k], p[k]); }
 			}
 		}
+		// Vertex diffuse color range (ARGB), to see what alpha the game gives effects like rain
+		const BYTE* pCol = nullptr;
+		UINT uColStride = 0;
+		if (dwFVF & D3DFVF_DIFFUSE)
+		{
+			if (bStrided)
+			{
+				auto* pData = static_cast<D3D7::D3DDRAWPRIMITIVESTRIDEDDATA*>(pVertexData);
+				pCol = static_cast<const BYTE*>(pData->diffuse.lpvData);
+				uColStride = pData->diffuse.dwStride;
+			}
+			else
+			{
+				UINT off = 0;
+				switch (dwFVF & D3D7::D3DFVF_POSITION_MASK)
+				{
+				case D3DFVF_XYZ: off = 12; break;
+				case D3DFVF_XYZRHW: off = 16; break;
+				default: off = 12 + 4 * (((dwFVF & D3D7::D3DFVF_POSITION_MASK) - D3DFVF_XYZ) / 2); break;
+				}
+				if (dwFVF & D3DFVF_NORMAL) off += 12;
+				if (dwFVF & D3DFVF_RESERVED1) off += 4;
+				pCol = static_cast<const BYTE*>(pVertexData) + off;
+				uColStride = (UINT)CalcFVFStride(dwFVF);
+			}
+		}
+		BYTE cmn[4] = { 255, 255, 255, 255 }, cmx[4] = { 0, 0, 0, 0 };
+		if (pCol != nullptr)
+		{
+			const DWORD dwCount = std::min<DWORD>(dwVertexCount, 4096);
+			for (DWORD v = 0; v < dwCount; v++)
+			{
+				const BYTE* c = pCol + v * uColStride; // B G R A
+				for (int k = 0; k < 4; k++) { cmn[k] = std::min(cmn[k], c[k]); cmx[k] = std::max(cmx[k], c[k]); }
+			}
+			fprintf(m_pRemixLog, "    vcolor A[%u..%u] R[%u..%u] G[%u..%u] B[%u..%u]\n",
+				cmn[3], cmx[3], cmn[2], cmx[2], cmn[1], cmx[1], cmn[0], cmx[0]);
+		}
+		DWORD rsBlend = 0, rsSrc = 0, rsDst = 0, rsAT = 0, rsZW = 0, rsLight = 0;
+		m_pDev->GetRenderState(D3D9::D3DRS_ALPHABLENDENABLE, &rsBlend);
+		m_pDev->GetRenderState(D3D9::D3DRS_SRCBLEND, &rsSrc);
+		m_pDev->GetRenderState(D3D9::D3DRS_DESTBLEND, &rsDst);
+		m_pDev->GetRenderState(D3D9::D3DRS_ALPHATESTENABLE, &rsAT);
+		m_pDev->GetRenderState(D3D9::D3DRS_ZWRITEENABLE, &rsZW);
+		m_pDev->GetRenderState(D3D9::D3DRS_LIGHTING, &rsLight);
+		{
+			D3D9::D3DMATRIX w, v;
+			m_pDev->GetTransform(D3D9::D3DTS_WORLD, &w);
+			m_pDev->GetTransform(D3D9::D3DTS_VIEW, &v);
+			fprintf(m_pRemixLog, "    pos min(%.1f %.1f %.1f) max(%.1f %.1f %.1f) worldT(%.1f %.1f %.1f) viewT(%.1f %.1f %.1f) view00 %.2f\n",
+				mn[0], mn[1], mn[2], mx[0], mx[1], mx[2], w._41, w._42, w._43, v._41, v._42, v._43, v._11);
+		}
+		fprintf(m_pRemixLog, "    blend %u src%u dst%u alphatest %u zwrite %u lighting %u\n",
+			(unsigned)rsBlend, (unsigned)rsSrc, (unsigned)rsDst, (unsigned)rsAT, (unsigned)rsZW, (unsigned)rsLight);
+
 		const D3D7::D3DCOLORVALUE& d = m_CurrentMaterial.diffuse;
 		fprintf(m_pRemixLog, "    size %.1f x %.1f x %.1f  matDiffuse(%.2f %.2f %.2f %.2f) diffSrc%u\n",
 			mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2], d.r, d.g, d.b, d.a, (unsigned)m_dwDiffuseMaterialSource);
