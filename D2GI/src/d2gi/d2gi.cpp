@@ -2490,13 +2490,16 @@ VOID D2GI::SetRemixHeadlights(const FLOAT* v)
 	float dir[3] = { fwd[0] - up[0] * 0.12f, fwd[1] - up[1] * 0.12f, fwd[2] - up[2] * 0.12f };
 	norm(dir);
 
+	// Remix ignores the diffuse level here: with constant attenuation it converts a D3D light into a light whose
+	// intensity grows with Range^2 (times rtx.lightConversionIntensityFactor). So the strength drives the range:
+	// 100 = range 400 (lights the road ahead; 120 was barely visible), intensity ~ Headlights.
 	const float s = D2GIConfig::RemixHeadlights() / 100.0f;
 	D3D9::D3DLIGHT9 L = {};
 	L.Type = D3D9::D3DLIGHT_SPOT;
-	L.Diffuse = { 1.0f * s, 0.95f * s, 0.85f * s, 1.0f };
+	L.Diffuse = { 1.0f, 0.95f, 0.85f, 1.0f };
 	L.Specular = L.Diffuse;
 	L.Direction = { dir[0], dir[1], dir[2] };
-	L.Range = 120.0f;
+	L.Range = 400.0f * std::sqrt(s);
 	L.Falloff = 1.0f;
 	L.Attenuation0 = 1.0f;
 	L.Theta = 0.35f;
