@@ -1671,6 +1671,54 @@ VOID D2GI::RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrid
 				for (int k = 0; k < 3; k++) { mn[k] = std::min(mn[k], p[k]); mx[k] = std::max(mx[k], p[k]); }
 			}
 		}
+		// Vertex diffuse color range (ARGB), to see what alpha the game gives effects like rain
+		const BYTE* pCol = nullptr;
+		UINT uColStride = 0;
+		if (dwFVF & D3DFVF_DIFFUSE)
+		{
+			if (bStrided)
+			{
+				auto* pData = static_cast<D3D7::D3DDRAWPRIMITIVESTRIDEDDATA*>(pVertexData);
+				pCol = static_cast<const BYTE*>(pData->diffuse.lpvData);
+				uColStride = pData->diffuse.dwStride;
+			}
+			else
+			{
+				UINT off = 0;
+				switch (dwFVF & D3D7::D3DFVF_POSITION_MASK)
+				{
+				case D3DFVF_XYZ: off = 12; break;
+				case D3DFVF_XYZRHW: off = 16; break;
+				default: off = 12 + 4 * (((dwFVF & D3D7::D3DFVF_POSITION_MASK) - D3DFVF_XYZ) / 2); break;
+				}
+				if (dwFVF & D3DFVF_NORMAL) off += 12;
+				if (dwFVF & D3DFVF_RESERVED1) off += 4;
+				pCol = static_cast<const BYTE*>(pVertexData) + off;
+				uColStride = (UINT)CalcFVFStride(dwFVF);
+			}
+		}
+		BYTE cmn[4] = { 255, 255, 255, 255 }, cmx[4] = { 0, 0, 0, 0 };
+		if (pCol != nullptr)
+		{
+			const DWORD dwCount = std::min<DWORD>(dwVertexCount, 4096);
+			for (DWORD v = 0; v < dwCount; v++)
+			{
+				const BYTE* c = pCol + v * uColStride; // B G R A
+				for (int k = 0; k < 4; k++) { cmn[k] = std::min(cmn[k], c[k]); cmx[k] = std::max(cmx[k], c[k]); }
+			}
+			fprintf(m_pRemixLog, "    vcolor A[%u..%u] R[%u..%u] G[%u..%u] B[%u..%u]\n",
+				cmn[3], cmx[3], cmn[2], cmx[2], cmn[1], cmx[1], cmn[0], cmx[0]);
+		}
+		DWORD rsBlend = 0, rsSrc = 0, rsDst = 0, rsAT = 0, rsZW = 0, rsLight = 0;
+		m_pDev->GetRenderState(D3D9::D3DRS_ALPHABLENDENABLE, &rsBlend);
+		m_pDev->GetRenderState(D3D9::D3DRS_SRCBLEND, &rsSrc);
+		m_pDev->GetRenderState(D3D9::D3DRS_DESTBLEND, &rsDst);
+		m_pDev->GetRenderState(D3D9::D3DRS_ALPHATESTENABLE, &rsAT);
+		m_pDev->GetRenderState(D3D9::D3DRS_ZWRITEENABLE, &rsZW);
+		m_pDev->GetRenderState(D3D9::D3DRS_LIGHTING, &rsLight);
+		fprintf(m_pRemixLog, "    blend %u src%u dst%u alphatest %u zwrite %u lighting %u\n",
+			(unsigned)rsBlend, (unsigned)rsSrc, (unsigned)rsDst, (unsigned)rsAT, (unsigned)rsZW, (unsigned)rsLight);
+
 		const D3D7::D3DCOLORVALUE& d = m_CurrentMaterial.diffuse;
 		fprintf(m_pRemixLog, "    size %.1f x %.1f x %.1f  matDiffuse(%.2f %.2f %.2f %.2f) diffSrc%u\n",
 			mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2], d.r, d.g, d.b, d.a, (unsigned)m_dwDiffuseMaterialSource);
