@@ -12,26 +12,33 @@ Status: `todo` / `in progress` / `done`.
 - A 256x256 blit texture (`1AB38C53610F8621` with `StaticBlitTextures`) on a cab-camera quad; `mod.usda` gives it a wet-glass material.
 **Why none of it shows from the cab:** cab frames and exterior frames are different frames. From the driver's seat the game draws `drop.txr`, then `glass.txr`, then `pribor.txr`, and never submits `rain.txr` at all. `rain.txr` appears only in frames with no cab. Splashes are already before the gauges, so moving the UI injection later cannot create rain draws. Removing the cab hashes from `uiTextures` rendered the cab twice and left the rain invisible. Reverted.
 **Now:** `[REMIX] EmitCabRain=1` remembers `rain.txr` and the world camera (the view matrix used for the splashes). On the first `pribor.txr` of a frame that had splashes and no rain sheet, D2GI draws six world-space `rain.txr` sheets around that camera, before the gauges. `88948250F5593569` and `105A0D629252C4D0` are in `rtx.particleTextures`. Not confirmed in game yet. The wet-glass layer is still the next step after the streaks are visible.
-**How to get rain:** see the `ht2-test-build` skill. The «Погода» slider all the way left gives rain, even when Remix does not show it; confirm with `txr\rain.txr` in `d2gi_remix.log`.
+**Rain works outside the cab** (27.10 20:05, owner's hint): with the «Погода» slider left it rains from the start; press **V** for the third-person camera and rain streaks are visible and ray-traced under Remix, with no rtx.conf entry needed. From the cab the game draws no rain streaks at all (frame dumps: `rain.txr` only in third-person frames), so "no rain in the cab" is the original game's behaviour. What is left is the wet windshield: the 256x256 layer is drawn after the cab's UI-tagged parts (rasterized, material ignored) and did not appear in the cab frames dumped while standing still; check it while driving in rain.
+**How to get rain:** «Погода» slider all the way left, new game, V to check. Do not edit `wstart`/`wtemp` in TRUCK.INI (`wtemp=0` hangs loading).
 **Acceptance:** rain is visible in the world and the windshield looks wet in rain, with no black areas and a clear view through the glass.
 
 ### 4. Audit other cab-camera effects with View Model on — todo
 Splashes, mud on glass, headlight glare at night: check that nothing else blows up like the raindrops did.
 
 ### 5. Hood material — todo
-The hood is a flat untextured surface. Give it a painted-metal material in RTX Remix Toolkit.
+The hood is not untextured: it is a 20-vertex cab-camera draw with the truck's 256x256 texture atlas (Remix hash `F70CEFD60206880E`, unnamed), drawn before the cab's UI-tagged parts, so it is ray-traced. A material on that hash would also apply to the whole truck seen from outside (tyres, glass and lights are in the same atlas). Needs a roughness/metallic map that follows the atlas layout, made in RTX Remix Toolkit.
 
-### 6. Clean up rtx.conf categories — todo
-With #13 every hash can be matched to a texture name. Found so far: exhaust smoke and dust (`vapor_00..03`, `dust_02`) are in `rtx.skyBoxTextures`; tree shadows and traffic-light glows are in `particleTextures`/`ignoreTextures` as expected. Recheck every entry by name and move wrong ones.
+### 6. Clean up rtx.conf categories — in progress
+Hash → name table in `remix-mod/README.md`. Smoke and dust moved from sky to particles in #18. Still unnamed: entries never seen in the logged runs (other regions, menus) and the 30 `uiTextures`, of which 5 are cab parts (needed as UI for now, see item 1).
+
+### 7. Game froze after toggling cab panels — todo
+27.10 18:04: after pressing F3 (info), F5 (radio), F6, F7 in the cab, the game stopped responding; `bridge64.log` ends with `Data Queue overwrite condition triggered`, no crash log. Seen once. Reproduce and check whether a panel or a camera switch causes it.
 
 ## In review
-- #16 SkipBackdrop (items 2 and 3: sky dome and khaki ground plane hidden in any weather and time of day): the game draws them untextured with z-write off before the world, the only untextured 3D draws like that (checked in `d2gi_remix.log`). D2GI skips them.
-- #13: `DebugDraws` log shows the Remix hash, vertex alpha, blend state and positions for each draw.
+- #17: `DebugDraws` frame-order dump (verified in game).
+- #18: smoke and dust as particles instead of sky.
+- #16 SkipBackdrop (items 2 and 3: sky dome and khaki ground plane hidden in any weather and time of day). Checked in game at the start base in one weather; other weather / time of day still to check.
 - #4: HUD text and digits stop flickering (verified in game).
 - #5: color-keyed textures in the managed pool, which fixes grass on car wheels (verified in game).
 
 ## Done
 - Workshop item 3828304518 updated to `pr-18 cc5d082` by Claude (27.10 18:22), change note in Russian.
+- #13 `DebugDraws` log shows the Remix hash, vertex alpha, blend state and positions for each draw (hashes match rtx.conf entries).
+- #15 Steam Workshop package (`RTX-Workshop.cmd`); published by the owner as item 3828304518 (friends).
 - #10 ClearWindshield: no black film over the windshield (verified in game).
 - #11 install bundle as a GitHub release + `RTX-Update`/`RTX-Play`/`RTX-Logs` scripts (used to install in this session).
 - #12 agent guide (`AGENTS.md`) and project skills.
