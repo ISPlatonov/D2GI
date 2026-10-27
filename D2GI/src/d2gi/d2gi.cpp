@@ -2458,7 +2458,7 @@ VOID D2GI::SetRemixSun()
 // says it is dark, put two spot lights in front of the camera. The world camera is the view matrix the game sets
 // for the world (row vectors: p_view = p_world * R + t), so the camera axes in world space are the rows of R^-1.
 // The player's headlight switch, read from king.exe 8.1 (Steam, PE timestamp 0x400502EA):
-// player vehicle = *(*(0x6D2078) + 0x268); vehicle+0x51B8 = 0 off, 1 low beam, 2 high beam (L / Shift+L,
+// player vehicle = *(*(0x6D2078) + 0x268); vehicle+0x51B8 = 0 off, 1 low beam, 2 high beam (L toggles, Ctrl+L low/high,
 // see the key handler at 0x597D36); vehicle+0x51B4 = automatic lights the game sets by the hour (0x55057A).
 // Returns -1 when the game version is unknown or the vehicle is not there (menus, loading).
 static int ReadGameDword(DWORD dwAddr, DWORD* pOut)
