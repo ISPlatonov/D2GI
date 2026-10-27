@@ -492,6 +492,12 @@ VOID D2GI::OnClear(DWORD dwCount, D3D7::LPD3DRECT pRects, DWORD dwFlags, D3D7::D
 
 VOID D2GI::OnLightEnable(DWORD i, BOOL bEnable)
 {
+	if (D2GIConfig::RemixDebugDrawsEnabled())
+	{
+		static int s_nLogged = 0;
+		if (s_nLogged++ < 100)
+			Logger::Log(TEXT("Remix light %u enable %d"), (unsigned)i, (int)bEnable);
+	}
 	m_pDev->LightEnable(i, bEnable);
 }
 
@@ -726,6 +732,14 @@ VOID D2GI::OnRenderStateSet(D3D7::D3DRENDERSTATETYPE eState, DWORD dwValue)
 			m_pDev->SetRenderState(D3D9::D3DRS_FOGEND, dwValue);
 			break;
 		case D3D7::D3DRENDERSTATE_AMBIENT:
+			if (D2GIConfig::RemixDebugDrawsEnabled())
+			{
+				static DWORD s_dwLastAmbient = 0xFFFFFFFF;
+				static int s_nLogged = 0;
+				if (dwValue != s_dwLastAmbient && s_nLogged++ < 50)
+					Logger::Log(TEXT("Remix ambient 0x%08X"), (unsigned)dwValue);
+				s_dwLastAmbient = dwValue;
+			}
 			m_pDev->SetRenderState(D3D9::D3DRS_AMBIENT, dwValue);
 			break;
 		case D3D7::D3DRENDERSTATE_ZWRITEENABLE:
@@ -962,6 +976,24 @@ VOID D2GI::OnTransformSet(D3D7::D3DTRANSFORMSTATETYPE eType, D3D7::D3DMATRIX* pM
 
 VOID D2GI::OnLightSet(DWORD i, D3D7::LPD3DLIGHT7 pLight)
 {
+	// DebugDraws: log the game's fixed-function lights (RTX Remix converts them into its own lights).
+	// Log a light index again only when its type changes, at most 300 lines.
+	if (D2GIConfig::RemixDebugDrawsEnabled() && pLight != nullptr)
+	{
+		static DWORD s_dwLastType[64] = {};
+		static int s_nLogged = 0;
+		const DWORD dwType = (DWORD)pLight->dltType;
+		if (i < 64 && s_nLogged < 300 && (s_dwLastType[i] != dwType || s_nLogged < 40))
+		{
+			s_dwLastType[i] = dwType;
+			s_nLogged++;
+			Logger::Log(TEXT("Remix light %u: type %u diffuse(%.2f %.2f %.2f) pos(%.1f %.1f %.1f) dir(%.2f %.2f %.2f) range %.1f att(%.3f %.3f %.3f) cone(%.2f %.2f)"),
+				(unsigned)i, (unsigned)dwType, pLight->dcvDiffuse.r, pLight->dcvDiffuse.g, pLight->dcvDiffuse.b,
+				pLight->dvPosition.x, pLight->dvPosition.y, pLight->dvPosition.z,
+				pLight->dvDirection.x, pLight->dvDirection.y, pLight->dvDirection.z, pLight->dvRange,
+				pLight->dvAttenuation0, pLight->dvAttenuation1, pLight->dvAttenuation2, pLight->dvTheta, pLight->dvPhi);
+		}
+	}
 	m_pDev->SetLight(i, (D3D9::D3DLIGHT9*)pLight);
 }
 
