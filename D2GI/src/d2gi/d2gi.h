@@ -147,6 +147,18 @@ class D2GI
 	bool IsDumpFrame() const;
 	VOID DumpPlayerVehicle(const FLOAT* pView);
 	uint32_t m_dbgVehicleDumpFrame = 0;
+	FLOAT m_World[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
+	// Player lamp positions in truck coordinates (x right, y forward, z up); defaults until learned from lg_head quads
+	FLOAT m_PlayerLamp[2][3] = { { -0.9f, 5.0f, -0.3f }, { 0.9f, 5.0f, -0.3f } };
+	int m_nPlayerLampSamples[2] = { 0, 0 };
+	Microsoft::WRL::ComPtr<D3D9::IDirect3DTexture9> m_pPlayerGlowTex;
+	bool m_bPlayerGlowFailed = false;
+	bool ReadPlayerMatrix(FLOAT* M);
+	bool LearnPlayerLamp(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD dwVertexCount);
+	D3D9::IDirect3DTexture9* GetPlayerGlowTexture();
+public:
+	VOID RestoreTexture0(D2GITexture* pTex);
+private:
 	VOID MaybeEmitCabRain();
 	BOOL DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
 		DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags, BOOL bSkyDome = FALSE);

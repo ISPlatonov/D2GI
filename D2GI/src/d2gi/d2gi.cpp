@@ -959,6 +959,8 @@ VOID D2GI::OnTransformSet(D3D7::D3DTRANSFORMSTATETYPE eType, D3D7::D3DMATRIX* pM
 	switch (eType)
 	{
 		case D3D7::D3DTRANSFORMSTATE_WORLD:
+			if (pMatrix != nullptr)
+				CopyMemory(m_World, pMatrix, sizeof(m_World));
 			m_pDev->SetTransform(D3D9::D3DTS_WORLD, (D3D9::D3DMATRIX*)pMatrix);
 			break;
 		case D3D7::D3DTRANSFORMSTATE_VIEW:
@@ -1378,8 +1380,24 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 		else if (TextureNameIs(m_lpCurrentTextures[0], "pribor.txr"))
 			MaybeEmitCabRain();
 	}
-	if (D2GIConfig::RemixHeadlights() > 0 && !m_bInUntexturedFix && TextureNameIs(m_lpCurrentTextures[0], "pribor.txr"))
-		m_bSawCabThisFrame = true;
+	// The player's own headlight glows (lg_head.txr quads in front of the player's truck): learn where the lamps are
+	// on the truck, and draw them with a texture Remix does not turn into effect lights (the Headlights spots light
+	// the road instead, in every camera view).
+	D2GITexture* pGlowSaved = nullptr;
+	if (D2GIConfig::RemixHeadlights() > 0 && !m_bInUntexturedFix && TextureNameIs(m_lpCurrentTextures[0], "lg_head.txr") &&
+		LearnPlayerLamp(dwFVF, bStrided, pVertexData, dwVertexCount))
+	{
+		D3D9::IDirect3DTexture9* pGlow = GetPlayerGlowTexture();
+		if (pGlow != nullptr)
+		{
+			pGlowSaved = m_lpCurrentTextures[0];
+			m_pDev->SetTexture(0, pGlow);
+		}
+	}
+	struct GlowRestore {
+		D2GI* p; D2GITexture* t;
+		~GlowRestore() { if (t != nullptr) p->RestoreTexture0(t); }
+	} glowRestore = { this, pGlowSaved };
 
 	// Backdrop: the game first draws an untextured sky dome and a flat ground plane around the camera with
 	// z-write off. Under Remix they cover the world (sky) or lie over roads (khaki plane), and their
@@ -2563,7 +2581,9 @@ VOID D2GI::SetRemixHeadlights(const FLOAT* v)
 	// Unknown exe: fall back to "on when dark"
 	const bool bSwitchOn = iSwitch < 0 ? NightFactor() < 0.35f : iSwitch > 0;
 	const bool bHigh = iSwitch == 2;
-	const bool bOn = m_bLastFrameCab && bSwitchOn;
+	float M[12];
+	const bool bHaveTruck = ReadPlayerMatrix(M);
+	const bool bOn = bSwitchOn && bHaveTruck;
 	if (!bOn)
 	{
 		if (m_bHeadlightsOn)
@@ -2575,43 +2595,21 @@ VOID D2GI::SetRemixHeadlights(const FLOAT* v)
 		return;
 	}
 
-	// R = upper 3x3 of the view matrix, t = its translation; invert R (general 3x3 inverse)
-	const float a = v[0], b = v[1], c = v[2];
-	const float d = v[4], e = v[5], f = v[6];
-	const float g = v[8], h = v[9], k = v[10];
-	const float det = a * (e * k - f * h) - b * (d * k - f * g) + c * (d * h - e * g);
-	if (fabsf(det) < 1e-6f)
-		return;
-	const float id = 1.0f / det;
-	float inv[9] = {
-		(e * k - f * h) * id, (c * h - b * k) * id, (b * f - c * e) * id,
-		(f * g - d * k) * id, (a * k - c * g) * id, (c * d - a * f) * id,
-		(d * h - e * g) * id, (b * g - a * h) * id, (a * e - b * d) * id,
-	};
-	const float tx = v[12], ty = v[13], tz = v[14];
-	float eye[3], right[3], up[3], fwd[3];
-	for (int j = 0; j < 3; j++)
-	{
-		eye[j] = -(tx * inv[0 + j] + ty * inv[3 + j] + tz * inv[6 + j]);
-		right[j] = inv[0 + j];
-		up[j] = inv[3 + j];
-		fwd[j] = inv[6 + j];
-	}
-	auto norm = [](float* p) {
-		const float l = std::sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
-		if (l > 0.0f) { p[0] /= l; p[1] /= l; p[2] /= l; }
-	};
-	norm(right); norm(up); norm(fwd);
+	// Truck axes in world space: M rows = local X (right), Y (forward), Z (up); M[9..11] = position
+	const float* right = M;
+	const float* fwd = M + 3;
+	const float* up = M + 6;
+	const float* pos = M + 9;
 
 	// Beam: low beam tilted down, high beam almost level
-	const float tilt = bHigh ? 0.03f : 0.15f;
+	const float tilt = bHigh ? 0.03f : 0.12f;
 	float dir[3] = { fwd[0] - up[0] * tilt, fwd[1] - up[1] * tilt, fwd[2] - up[2] * tilt };
-	norm(dir);
+	const float dl = std::sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
+	if (dl > 0.0f) { dir[0] /= dl; dir[1] /= dl; dir[2] /= dl; }
 
 	// Remix ignores the diffuse level here: with constant attenuation it converts a D3D light into a light whose
 	// intensity grows with Range^2 (times rtx.lightConversionIntensityFactor). So the strength drives the range:
-	// 100 = range 600 for the low beam, 900 for the high beam (250 was barely visible from the cab once
-	// rtx.numFramesToKeepLights stopped Remix from keeping 100 frames of old copies of the moving beams).
+	// 100 = range 600 for the low beam, 900 for the high beam.
 	const float s = D2GIConfig::RemixHeadlights() / 100.0f;
 	D3D9::D3DLIGHT9 L = {};
 	L.Type = D3D9::D3DLIGHT_SPOT;
@@ -2624,15 +2622,16 @@ VOID D2GI::SetRemixHeadlights(const FLOAT* v)
 	L.Theta = bHigh ? 0.25f : 0.4f;  // full-brightness cone
 	L.Phi = bHigh ? 0.5f : 0.8f;     // outer cone
 
-	// Headlamps: in front of the hood (~4.5 units ahead of the driver's eye, ~2 below it, ~0.9 to each side),
-	// so the beams do not light the hood itself
+	// Lamps at the learned lamp positions on the truck (local coordinates), moved a little forward so the
+	// light sphere sits in front of the bumper
 	for (int side = 0; side < 2; side++)
 	{
-		const float sx = side == 0 ? -0.9f : 0.9f;
+		const float* l = m_PlayerLamp[side];
+		const float ly = l[1] + 0.6f;
 		L.Position = {
-			eye[0] + fwd[0] * 4.5f - up[0] * 2.0f + right[0] * sx,
-			eye[1] + fwd[1] * 4.5f - up[1] * 2.0f + right[1] * sx,
-			eye[2] + fwd[2] * 4.5f - up[2] * 2.0f + right[2] * sx,
+			pos[0] + right[0] * l[0] + fwd[0] * ly + up[0] * l[2],
+			pos[1] + right[1] * l[0] + fwd[1] * ly + up[1] * l[2],
+			pos[2] + right[2] * l[0] + fwd[2] * ly + up[2] * l[2],
 		};
 		m_pDev->SetLight((side == 0 ? REMIX_HEADLIGHT_INDEX : REMIX_HEADLIGHT_INDEX2), &L);
 		m_pDev->LightEnable((side == 0 ? REMIX_HEADLIGHT_INDEX : REMIX_HEADLIGHT_INDEX2), TRUE);
@@ -2643,7 +2642,139 @@ VOID D2GI::SetRemixHeadlights(const FLOAT* v)
 		m_bHeadlightsOn = true;
 		static int s_nLogged = 0;
 		if (s_nLogged++ < 10)
-			Logger::Log(TEXT("Remix: player headlights on at (%.1f %.1f %.1f) dir (%.2f %.2f %.2f) up (%.2f %.2f %.2f)"),
-				eye[0], eye[1], eye[2], dir[0], dir[1], dir[2], up[0], up[1], up[2]);
+			Logger::Log(TEXT("Remix: player headlights on, truck at (%.1f %.1f %.1f) fwd (%.2f %.2f %.2f), lamps (%.2f %.2f %.2f) (%.2f %.2f %.2f)%s"),
+				pos[0], pos[1], pos[2], fwd[0], fwd[1], fwd[2],
+				m_PlayerLamp[0][0], m_PlayerLamp[0][1], m_PlayerLamp[0][2], m_PlayerLamp[1][0], m_PlayerLamp[1][1], m_PlayerLamp[1][2],
+				m_nPlayerLampSamples[0] > 0 && m_nPlayerLampSamples[1] > 0 ? TEXT("") : TEXT(" (default lamp positions)"));
 	}
+}
+
+
+// Player vehicle transform (king.exe 8.1): vehicle+0x204 = 3 rows of 3 floats (local X right, Y forward, Z up in
+// world space), vehicle+0x228 = position. Found by dumping the vehicle while driving (d2gi_vehicle_*.bin).
+bool D2GI::ReadPlayerMatrix(FLOAT* M)
+{
+	if (ReadPlayerHeadlightSwitch(nullptr) < 0)
+		return false;
+	DWORD dwGame = 0, dwVeh = 0;
+	if (!ReadGameDword(0x6D2078, &dwGame) || dwGame < 0x10000 || !ReadGameDword(dwGame + 0x268, &dwVeh) || dwVeh < 0x10000)
+		return false;
+	if (!CopyGameMemory(M, dwVeh + 0x204, 12 * sizeof(FLOAT)))
+		return false;
+	for (int i = 0; i < 12; i++)
+		if (!std::isfinite(M[i]))
+			return false;
+	// Rows must be unit vectors
+	for (int r = 0; r < 3; r++)
+	{
+		const float l = M[r * 3] * M[r * 3] + M[r * 3 + 1] * M[r * 3 + 1] + M[r * 3 + 2] * M[r * 3 + 2];
+		if (l < 0.8f || l > 1.2f)
+			return false;
+	}
+	return true;
+}
+
+
+// An lg_head.txr quad: if it sits at the front of the player's truck, average its center (in truck coordinates)
+// into the left or right lamp and return true.
+bool D2GI::LearnPlayerLamp(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD dwVertexCount)
+{
+	if (bStrided || pVertexData == nullptr || dwVertexCount == 0 || (dwFVF & 0x00E) != 0x002)
+		return false;
+	float M[12];
+	if (!ReadPlayerMatrix(M))
+		return false;
+
+	const UINT uStride = (UINT)CalcFVFStride(dwFVF);
+	float c[3] = { 0, 0, 0 };
+	for (DWORD i = 0; i < dwVertexCount; i++)
+	{
+		const FLOAT* p = reinterpret_cast<const FLOAT*>(static_cast<const BYTE*>(pVertexData) + i * uStride);
+		c[0] += p[0]; c[1] += p[1]; c[2] += p[2];
+	}
+	c[0] /= dwVertexCount; c[1] /= dwVertexCount; c[2] /= dwVertexCount;
+	// to world (row vectors: w = c * World)
+	const FLOAT* W = m_World;
+	const float w[3] = {
+		c[0] * W[0] + c[1] * W[4] + c[2] * W[8] + W[12],
+		c[0] * W[1] + c[1] * W[5] + c[2] * W[9] + W[13],
+		c[0] * W[2] + c[1] * W[6] + c[2] * W[10] + W[14],
+	};
+	// to truck coordinates
+	const float d[3] = { w[0] - M[9], w[1] - M[10], w[2] - M[11] };
+	float l[3];
+	for (int r = 0; r < 3; r++)
+		l[r] = d[0] * M[r * 3] + d[1] * M[r * 3 + 1] + d[2] * M[r * 3 + 2];
+	if (fabsf(l[0]) > 3.0f || l[1] < 1.0f || l[1] > 10.0f || fabsf(l[2]) > 3.0f)
+		return false;
+
+	const int side = l[0] < 0.0f ? 0 : 1;
+	int& n = m_nPlayerLampSamples[side];
+	float* lamp = m_PlayerLamp[side];
+	if (n == 0)
+	{
+		lamp[0] = l[0]; lamp[1] = l[1]; lamp[2] = l[2];
+	}
+	else if (n < 1000)
+	{
+		const float k = 1.0f / (float)(n + 1);
+		for (int i = 0; i < 3; i++)
+			lamp[i] += (l[i] - lamp[i]) * k;
+	}
+	if (n < 1000)
+		n++;
+	if (n == 1 || n == 100)
+		Logger::Log(TEXT("Remix: player %s lamp at (%.2f %.2f %.2f) on the truck (%d samples)"),
+			side == 0 ? TEXT("left") : TEXT("right"), lamp[0], lamp[1], lamp[2], n);
+	return true;
+}
+
+
+// A glow texture of our own for the player's headlight quads: the quads sample a narrow vertical strip
+// (u 0.45..0.55), so the content is a soft warm-white glow fading towards the ends of the strip.
+// Its Remix hash is logged; it is listed in rtx.particleTextures but not in rtx.lightConverter.
+D3D9::IDirect3DTexture9* D2GI::GetPlayerGlowTexture()
+{
+	if (m_pPlayerGlowTex)
+		return m_pPlayerGlowTex.Get();
+	if (m_bPlayerGlowFailed)
+		return nullptr;
+	m_bPlayerGlowFailed = true;
+
+	const UINT N = 64;
+	Microsoft::WRL::ComPtr<D3D9::IDirect3DTexture9> pTex;
+	if (FAILED(m_pDev->CreateTexture(N, N, 1, 0, D3D9::D3DFMT_A8R8G8B8, D3D9::D3DPOOL_MANAGED, pTex.GetAddressOf(), nullptr)))
+		return nullptr;
+	D3D9::D3DLOCKED_RECT lr;
+	if (FAILED(pTex->LockRect(0, &lr, nullptr, 0)))
+		return nullptr;
+	static DWORD s_pixels[64 * 64];
+	for (UINT y = 0; y < N; y++)
+	{
+		DWORD* row = reinterpret_cast<DWORD*>(static_cast<BYTE*>(lr.pBits) + y * lr.Pitch);
+		for (UINT x = 0; x < N; x++)
+		{
+			const float u = (x + 0.5f) / N, v = (y + 0.5f) / N;
+			const float du = fabsf(u - 0.5f) * 2.0f, dv = fabsf(v - 0.5f) * 2.0f;
+			float a = (1.0f - du) * (1.0f - dv * dv);
+			a = std::max(0.0f, std::min(1.0f, a));
+			const DWORD A = (DWORD)(a * 255.0f + 0.5f);
+			const DWORD px = (A << 24) | (0xFF << 16) | (0xF6 << 8) | 0xE6;
+			row[x] = px;
+			s_pixels[y * N + x] = px;
+		}
+	}
+	pTex->UnlockRect(0);
+	const unsigned long long h = XXH3_64bits(s_pixels, sizeof(s_pixels));
+	Logger::Log(TEXT("Remix: player headlight glow texture created, Remix hash 0x%08X%08X"),
+		(unsigned)(h >> 32), (unsigned)(h & 0xFFFFFFFF));
+	m_pPlayerGlowTex = pTex;
+	m_bPlayerGlowFailed = false;
+	return m_pPlayerGlowTex.Get();
+}
+
+
+VOID D2GI::RestoreTexture0(D2GITexture* pTex)
+{
+	m_pDev->SetTexture(0, pTex != nullptr ? pTex->GetD3D9Texture() : nullptr);
 }
