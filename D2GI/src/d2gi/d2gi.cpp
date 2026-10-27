@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <iterator>
 #include <cmath>
+#include <string>
 
 #include <shlwapi.h>
 #include <windowsx.h>
@@ -1068,6 +1069,32 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 
 	if (D2GIConfig::RemixDebugDrawsEnabled() && !m_bInUntexturedFix)
 		RemixDebugLogDraw(pt, dwFVF, bStrided, pVertexData, dwVertexCount, pIndexData, dwIndexCount);
+
+	// Windshield env quad (d2gi_remix.log: pt6 verts4 fvf212, t1 glass_env SELECTARG1).
+	// Stage-1 UVs are projective and leave 0..1 when the cab camera turns, so the card smears
+	// and the world shows through the edges. Remix also rasterizes it as a view model, so the
+	// replacement material never covers it. Drop the draw; the path-traced world stays visible.
+	if (D2GIConfig::RemixClearWindshieldEnabled() && !m_bInUntexturedFix &&
+		pt == D3D7::D3DPT_TRIANGLEFAN && dwVertexCount == 4 && pIndexData == nullptr &&
+		((dwFVF >> 8) & 0xF) >= 2 &&
+		m_dbgStageState[1][D3D7::D3DTSS_COLOROP] == D3D7::D3DTOP_SELECTARG1)
+	{
+		D2GITexture* pEnv = m_lpCurrentTextures[1];
+		if (pEnv != nullptr && pEnv->GetWidth() == 128 && pEnv->GetHeight() == 128)
+		{
+			const std::string& name = pEnv->GetDebugName();
+			if (name.empty() || name.find("glass_env") != std::string::npos)
+			{
+				static bool s_bLogged = false;
+				if (!s_bLogged)
+				{
+					s_bLogged = true;
+					Logger::Log(TEXT("Remix: skipping windshield glass_env quad"));
+				}
+				return;
+			}
+		}
+	}
 
 	if (D2GIConfig::RemixUntexturedColorsEnabled() && !m_bInUntexturedFix &&
 		DrawUntexturedWithColor(pt, dwFVF, bStrided, pVertexData, dwVertexCount, pIndexData, dwIndexCount, dwFlags))
