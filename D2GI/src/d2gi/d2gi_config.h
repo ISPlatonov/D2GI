@@ -43,6 +43,7 @@ class D2GIConfig
 	static bool       s_bRemixStaticBlitTextures;
 	static bool       s_bRemixClearWindshield;
 	static bool       s_bRemixSkipBackdrop;
+	static bool       s_bRemixEmitCabRain;
 public:
 	static HookOptions ReadFromFile();
 
@@ -63,6 +64,7 @@ public:
 	static bool RemixStaticBlitTexturesEnabled() { return s_bRemixStaticBlitTextures; }
 	static bool RemixClearWindshieldEnabled() { return s_bRemixClearWindshield; }
 	static bool RemixSkipBackdropEnabled() { return s_bRemixSkipBackdrop; }
+	static bool RemixEmitCabRainEnabled() { return s_bRemixEmitCabRain; }
 
 	static std::basic_string<TCHAR> GetConfigFilePath();
 };

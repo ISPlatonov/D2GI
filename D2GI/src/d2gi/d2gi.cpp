@@ -18,6 +18,7 @@
 #include "d2gi_config.h"
 
 #include <algorithm>
+#include <cstring>
 #include <iterator>
 #include <cmath>
 #include <string>
@@ -64,6 +65,9 @@ D2GI::D2GI()
 	m_bColorKeyEnabled = FALSE;
 
 	ZeroMemory(m_lpCurrentTextures, sizeof(m_lpCurrentTextures));
+	m_pRainTexture = nullptr;
+	m_bHaveWorldView = false;
+	m_bSawDrop = m_bSawRain = m_bEmittedCabRain = false;
 
 	// Direct3D default texture stage states (for draw logging)
 	m_dbgStageState[0][D3D7::D3DTSS_COLOROP] = D3D7::D3DTOP_MODULATE;
@@ -925,6 +929,16 @@ VOID D2GI::OnTransformSet(D3D7::D3DTRANSFORMSTATETYPE eType, D3D7::D3DMATRIX* pM
 		case D3D7::D3DTRANSFORMSTATE_WORLD:
 			m_pDev->SetTransform(D3D9::D3DTS_WORLD, (D3D9::D3DMATRIX*)pMatrix);
 			break;
+		case D3D7::D3DTRANSFORMSTATE_VIEW:
+			// The cab camera sets a view matrix with _11 == 1 (view space). Keep the last
+			// world-camera view so cab-only frames can still place rain in the world.
+			if (pMatrix != nullptr && fabsf(pMatrix->_11 - 1.f) > 0.2f)
+			{
+				CopyMemory(m_WorldView, pMatrix, sizeof(m_WorldView));
+				m_bHaveWorldView = true;
+			}
+			m_pDev->SetTransform(D3D9::D3DTS_VIEW, (D3D9::D3DMATRIX*)pMatrix);
+			break;
 		case D3D7::D3DTRANSFORMSTATE_WORLD1:
 			m_pDev->SetTransform(D3D9::D3DTS_WORLD1, (D3D9::D3DMATRIX*)pMatrix);
 			break;
@@ -963,6 +977,10 @@ VOID D2GI::OnClipStatusSet(D3D7::LPD3DCLIPSTATUS pStatus)
 
 VOID D2GI::Present()
 {
+	m_bSawDrop = false;
+	m_bSawRain = false;
+	m_bEmittedCabRain = false;
+
 	// In D3D7 it was allowed to call Present inside a BeginScene/EndScene pair, but in D3D9 it's not.
 	bool bRestartScene = false;
 	if (m_SceneBeginCount > 0)
@@ -1065,6 +1083,18 @@ BOOL D2GI::OnRenderStateGet(D3D7::D3DRENDERSTATETYPE eState, DWORD* pValue)
 }
 
 
+static bool TextureNameIs(D2GITexture* pTex, const char* file)
+{
+	if (pTex == nullptr || file == nullptr)
+		return false;
+	const std::string& name = pTex->GetDebugName();
+	const size_t n = std::strlen(file);
+	if (name.size() < n || _stricmp(name.c_str() + name.size() - n, file) != 0)
+		return false;
+	return name.size() == n || name[name.size() - n - 1] == '\\' || name[name.size() - n - 1] == '/';
+}
+
+
 static bool IsWindshieldGlass(D2GITexture* pTex)
 {
 	if (pTex == nullptr)
@@ -1074,7 +1104,158 @@ static bool IsWindshieldGlass(D2GITexture* pTex)
 	const size_t n = sizeof(kName) - 1;
 	if (name.size() < n || _stricmp(name.c_str() + name.size() - n, kName) != 0)
 		return false;
-	return name.size() == n || name[name.size() - n - 1] == '\\' || name[name.size() - n - 1] == '/';
+	return TextureNameIs(pTex, "glass.txr");
+}
+
+
+VOID D2GI::MaybeEmitCabRain()
+{
+	if (m_bEmittedCabRain || !m_bSawDrop || m_bSawRain)
+		return;
+	m_bEmittedCabRain = true;
+
+	if (m_pRainTexture == nullptr || !m_bHaveWorldView || m_pDev == nullptr)
+	{
+		static bool s_bLogged = false;
+		if (!s_bLogged)
+		{
+			s_bLogged = true;
+			Logger::Log(TEXT("Remix: cab rain not drawn (texture=%d view=%d)"),
+				(int)(m_pRainTexture != nullptr), (int)m_bHaveWorldView);
+		}
+		return;
+	}
+
+	const FLOAT* v = m_WorldView;
+	const FLOAT rx = v[0], ry = v[1], rz = v[2];
+	const FLOAT ux = v[4], uy = v[5], uz = v[6];
+	const FLOAT fx = v[8], fy = v[9], fz = v[10];
+	const FLOAT tx = v[12], ty = v[13], tz = v[14];
+	const FLOAT eye[3] = {
+		-(tx * rx + ty * ux + tz * fx),
+		-(tx * ry + ty * uy + tz * fy),
+		-(tx * rz + ty * uz + tz * fz),
+	};
+
+	struct Vtx { FLOAT x, y, z; DWORD c; FLOAT u, vv; };
+	Vtx verts[24];
+	const FLOAT dist = 14.f, halfW = 7.f, halfH = 10.f;
+	for (int i = 0; i < 6; i++)
+	{
+		const FLOAT ang = (FLOAT)i * (3.14159265f / 3.f);
+		const FLOAT cs = cosf(ang), sn = sinf(ang);
+		const FLOAT dx = rx * cs + fx * sn;
+		const FLOAT dy = ry * cs + fy * sn;
+		const FLOAT dz = rz * cs + fz * sn;
+		const FLOAT cx = eye[0] + dx * dist;
+		const FLOAT cy = eye[1] + dy * dist;
+		const FLOAT cz = eye[2] + dz * dist;
+		// Horizontal axis perpendicular to the sheet normal (dx,dy,dz) and to camera up.
+		FLOAT wx = uy * dz - uz * dy;
+		FLOAT wy = uz * dx - ux * dz;
+		FLOAT wz = ux * dy - uy * dx;
+		const FLOAT wlen = sqrtf(wx * wx + wy * wy + wz * wz);
+		if (wlen < 1e-4f)
+		{
+			ZeroMemory(verts + i * 4, sizeof(Vtx) * 4);
+			continue;
+		}
+		wx /= wlen; wy /= wlen; wz /= wlen;
+		const FLOAT ox = wx * halfW, oy = wy * halfW, oz = wz * halfW;
+		const FLOAT hx = ux * halfH, hy = uy * halfH, hz = uz * halfH;
+		Vtx* q = verts + i * 4;
+		q[0] = { cx - ox - hx, cy - oy - hy, cz - oz - hz, 0xFFFFFFFF, 0.f, 1.f };
+		q[1] = { cx + ox - hx, cy + oy - hy, cz + oz - hz, 0xFFFFFFFF, 1.f, 1.f };
+		q[2] = { cx - ox + hx, cy - oy + hy, cz - oz + hz, 0xFFFFFFFF, 0.f, 0.f };
+		q[3] = { cx + ox + hx, cy + oy + hy, cz + oz + hz, 0xFFFFFFFF, 1.f, 0.f };
+	}
+
+	D3D9::D3DMATRIX world = {}, view = {};
+	world._11 = world._22 = world._33 = world._44 = 1.f;
+	CopyMemory(&view, m_WorldView, sizeof(view));
+
+	D3D9::IDirect3DTexture9* pRain = m_pRainTexture->GetD3D9Texture();
+	if (pRain == nullptr)
+		return;
+
+	D3D9::IDirect3DBaseTexture9* pPrevTex0 = nullptr;
+	D3D9::IDirect3DBaseTexture9* pPrevTex1 = nullptr;
+	if (FAILED(m_pDev->GetTexture(0, &pPrevTex0)))
+		pPrevTex0 = nullptr;
+	if (FAILED(m_pDev->GetTexture(1, &pPrevTex1)))
+		pPrevTex1 = nullptr;
+	DWORD blend = 0, src = 0, dst = 0, zwrite = 0, zenable = 0, lighting = 0, cull = 0;
+	m_pDev->GetRenderState(D3D9::D3DRS_ALPHABLENDENABLE, &blend);
+	m_pDev->GetRenderState(D3D9::D3DRS_SRCBLEND, &src);
+	m_pDev->GetRenderState(D3D9::D3DRS_DESTBLEND, &dst);
+	m_pDev->GetRenderState(D3D9::D3DRS_ZWRITEENABLE, &zwrite);
+	m_pDev->GetRenderState(D3D9::D3DRS_ZENABLE, &zenable);
+	m_pDev->GetRenderState(D3D9::D3DRS_LIGHTING, &lighting);
+	m_pDev->GetRenderState(D3D9::D3DRS_CULLMODE, &cull);
+	D3D9::D3DMATRIX prevWorld, prevView;
+	m_pDev->GetTransform(D3D9::D3DTS_WORLD, &prevWorld);
+	m_pDev->GetTransform(D3D9::D3DTS_VIEW, &prevView);
+
+	m_pDev->SetTransform(D3D9::D3DTS_WORLD, &world);
+	m_pDev->SetTransform(D3D9::D3DTS_VIEW, &view);
+	m_pDev->SetTexture(0, pRain);
+	m_pDev->SetTexture(1, nullptr);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLOROP, D3D9::D3DTOP_MODULATE);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG1, D3DTA_TEXTURE);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG2, D3DTA_DIFFUSE);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAOP, D3D9::D3DTOP_SELECTARG1);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+	m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLOROP, D3D9::D3DTOP_DISABLE);
+	m_pDev->SetTextureStageState(1, D3D9::D3DTSS_ALPHAOP, D3D9::D3DTOP_DISABLE);
+	m_pDev->SetRenderState(D3D9::D3DRS_ALPHABLENDENABLE, TRUE);
+	m_pDev->SetRenderState(D3D9::D3DRS_SRCBLEND, D3D9::D3DBLEND_SRCALPHA);
+	m_pDev->SetRenderState(D3D9::D3DRS_DESTBLEND, D3D9::D3DBLEND_INVSRCALPHA);
+	m_pDev->SetRenderState(D3D9::D3DRS_ZWRITEENABLE, FALSE);
+	m_pDev->SetRenderState(D3D9::D3DRS_ZENABLE, TRUE);
+	m_pDev->SetRenderState(D3D9::D3DRS_LIGHTING, FALSE);
+	m_pDev->SetRenderState(D3D9::D3DRS_CULLMODE, D3D9::D3DCULL_NONE);
+	m_pDev->SetFVF(D3DFVF_XYZ | D3DFVF_DIFFUSE | D3DFVF_TEX1);
+
+	{
+		auto scene = BeginSceneScope();
+		for (int i = 0; i < 6; i++)
+		{
+			const Vtx* q = verts + i * 4;
+			if (q[0].x == 0.f && q[0].y == 0.f && q[0].z == 0.f && q[3].x == 0.f && q[3].y == 0.f && q[3].z == 0.f)
+				continue;
+			m_pDev->DrawPrimitiveUP(D3D9::D3DPT_TRIANGLESTRIP, 2, q, sizeof(Vtx));
+		}
+	}
+
+	m_pDev->SetTransform(D3D9::D3DTS_WORLD, &prevWorld);
+	m_pDev->SetTransform(D3D9::D3DTS_VIEW, &prevView);
+	m_pDev->SetTexture(0, pPrevTex0);
+	m_pDev->SetTexture(1, pPrevTex1);
+	if (pPrevTex0 != nullptr)
+		pPrevTex0->Release();
+	if (pPrevTex1 != nullptr)
+		pPrevTex1->Release();
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLOROP, m_dbgStageState[0][D3D7::D3DTSS_COLOROP]);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG1, m_dbgStageState[0][D3D7::D3DTSS_COLORARG1]);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_COLORARG2, m_dbgStageState[0][D3D7::D3DTSS_COLORARG2]);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAOP, m_dbgStageState[0][D3D7::D3DTSS_ALPHAOP]);
+	m_pDev->SetTextureStageState(0, D3D9::D3DTSS_ALPHAARG1, m_dbgStageState[0][D3D7::D3DTSS_ALPHAARG1]);
+	m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLOROP, m_dbgStageState[1][D3D7::D3DTSS_COLOROP]);
+	m_pDev->SetTextureStageState(1, D3D9::D3DTSS_ALPHAOP, m_dbgStageState[1][D3D7::D3DTSS_ALPHAOP]);
+	m_pDev->SetRenderState(D3D9::D3DRS_ALPHABLENDENABLE, blend);
+	m_pDev->SetRenderState(D3D9::D3DRS_SRCBLEND, src);
+	m_pDev->SetRenderState(D3D9::D3DRS_DESTBLEND, dst);
+	m_pDev->SetRenderState(D3D9::D3DRS_ZWRITEENABLE, zwrite);
+	m_pDev->SetRenderState(D3D9::D3DRS_ZENABLE, zenable);
+	m_pDev->SetRenderState(D3D9::D3DRS_LIGHTING, lighting);
+	m_pDev->SetRenderState(D3D9::D3DRS_CULLMODE, cull);
+
+	static bool s_bLogged = false;
+	if (!s_bLogged)
+	{
+		s_bLogged = true;
+		Logger::Log(TEXT("Remix: drawing cab rain sheets at (%.0f %.0f %.0f)"), eye[0], eye[1], eye[2]);
+	}
 }
 
 
@@ -1098,6 +1279,21 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 			Logger::Log(TEXT("Remix: skipping windshield glass quad (%u verts)"), (unsigned)dwVertexCount);
 		}
 		return;
+	}
+
+	// Cab frames draw drop.txr in world space, then switch the camera to view space and
+	// never submit rain.txr. Emit the rain sheets before the gauges, in that world camera.
+	if (D2GIConfig::RemixEmitCabRainEnabled() && !m_bInUntexturedFix)
+	{
+		if (TextureNameIs(m_lpCurrentTextures[0], "rain.txr"))
+		{
+			m_pRainTexture = m_lpCurrentTextures[0];
+			m_bSawRain = true;
+		}
+		else if (TextureNameIs(m_lpCurrentTextures[0], "drop.txr"))
+			m_bSawDrop = true;
+		else if (TextureNameIs(m_lpCurrentTextures[0], "pribor.txr"))
+			MaybeEmitCabRain();
 	}
 
 	// Backdrop: the game first draws an untextured sky dome and a flat ground plane around the camera with

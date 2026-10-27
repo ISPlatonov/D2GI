@@ -123,6 +123,15 @@ class D2GI
 	std::vector<BYTE> m_UntexturedVertexScratch;
 	D3D9::IDirect3DTexture9* GetSolidColorTexture(DWORD dwColor);
 	BOOL IsBackdropDraw(DWORD dwFVF);
+	// [REMIX] EmitCabRain: the cab frame draws drop.txr but never rain.txr. Remember the
+	// world view matrix and the rain texture, and submit a few rain sheets before the gauges.
+	D2GITexture* m_pRainTexture = nullptr;
+	FLOAT m_WorldView[16] = {};
+	bool m_bHaveWorldView = false;
+	bool m_bSawDrop = false;
+	bool m_bSawRain = false;
+	bool m_bEmittedCabRain = false;
+	VOID MaybeEmitCabRain();
 	BOOL DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
 		DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags);
 	VOID RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
@@ -191,6 +200,7 @@ public:
 
 	void OnMapDrawSetViewport(const RECT& viewport) { m_MinimapRenderer.SetViewport(viewport); }
 	void SetInMapDraw(bool bInMapDraw) { m_bInMapDraw = bInMapDraw; }
+	void RememberRainTexture(D2GITexture* pTex) { if (pTex != nullptr) m_pRainTexture = pTex; }
 	void OnBeginMinimapDraw();
 	void OnEndMinimapDraw();
 	void OnAddMinimapLine(float x1, float y1, float x2, float y2, DWORD color) { m_MinimapRenderer.AddMinimapLine(x1, y1, x2, y2, color); }

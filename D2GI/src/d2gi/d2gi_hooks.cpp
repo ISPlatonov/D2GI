@@ -8,6 +8,7 @@
 #include "d2gi_config.h"
 #include "d2gi_game_classes.h"
 #include "d2gi_surface.h"
+#include "d2gi_texture.h"
 
 #include "Utils/HookEach.hpp"
 #include "Utils/MemoryMgr.h"
@@ -26,6 +27,7 @@ using namespace D3D9;
 
 #include <d3dcommon.h>
 
+#include <cstring>
 #include <map>
 #include <string>
 #include <string_view>
@@ -835,6 +837,19 @@ namespace TextureNames
 		if (texName != nullptr && d2giSurface != nullptr)
 		{
 			d2giSurface->SetDebugName(texName);
+			if (D2GIConfig::RemixEmitCabRainEnabled() && d2giSurface->GetType() == ST_TEXTURE)
+			{
+				const char* slash = std::strrchr(texName, '\\');
+				if (slash == nullptr)
+					slash = std::strrchr(texName, '/');
+				const char* file = slash != nullptr ? slash + 1 : texName;
+				if (_stricmp(file, "rain.txr") == 0)
+				{
+					D2GI* pD2GI = D2GIHookInjector::ObtainD2GI();
+					if (pD2GI != nullptr)
+						pD2GI->RememberRainTexture(static_cast<D2GITexture*>(d2giSurface));
+				}
+			}
 #ifdef _DEBUG
 			const size_t texNameLen = std::strlen(texName);
 			d2giSurface->SetPrivateData(WKPDID_D3DDebugObjectName, const_cast<char*>(texName), texNameLen, 0);
@@ -1389,7 +1404,8 @@ void D2GIHookInjector::InjectHooks(const HookOptions& options)
 	}
 
 	// Texture names injection. ClearWindshield needs the glass.txr name to find the cab quad.
-	bool bWantTextureNames = D2GIConfig::RemixDebugDrawsEnabled() || D2GIConfig::RemixClearWindshieldEnabled();
+	bool bWantTextureNames = D2GIConfig::RemixDebugDrawsEnabled() || D2GIConfig::RemixClearWindshieldEnabled()
+		|| D2GIConfig::RemixEmitCabRainEnabled();
 #ifdef _DEBUG
 	bWantTextureNames = true;
 #endif
