@@ -32,6 +32,7 @@ With #13 every hash can be matched to a texture name. Found so far: exhaust smok
 - #5: color-keyed textures in the managed pool, which fixes grass on car wheels (verified in game).
 
 ## Done
+- Workshop item 3828304518 updated to `pr-18 cc5d082` by Claude (27.10 18:22), change note in Russian.
 - #10 ClearWindshield: no black film over the windshield (verified in game).
 - #11 install bundle as a GitHub release + `RTX-Update`/`RTX-Play`/`RTX-Logs` scripts (used to install in this session).
 - #12 agent guide (`AGENTS.md`) and project skills.
