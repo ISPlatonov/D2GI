@@ -27,6 +27,8 @@ Read this before changing anything. Most of it was learned the hard way.
 | `tools/windows/` | `RTX-Update.cmd`, `RTX-Play.cmd`, `RTX-Logs.cmd`, `RTX-Workshop.cmd` for the gaming PC |
 | `remix-mod/workshop/` | Steam Workshop descriptor (`mod.cfg`: title, description, visibility, priority -5) and preview |
 | `docs/REMIX_BACKLOG.md` | The board (GitHub Issues are off). Update it in the same PR as the change. |
+| `docs/KING_EXE_NOTES.md` | Reverse-engineering notes on king.exe 8.1: addresses, offsets, TRUCK.INI keys, rooms |
+| `docs/REMIX_NOTES.md` | How the Remix runtime behaves (light conversion and lifetime, config layers) |
 
 ## Build → release → install
 
@@ -89,6 +91,10 @@ the Workshop item, so test builds still apply).
 `RTX-Logs.cmd` zips all of them to the Desktop.
 
 ## Workflow
+
+Write down anything that took effort to find (addresses, offsets, Remix behaviour, what the owner liked or rejected)
+in `docs/KING_EXE_NOTES.md`, `docs/REMIX_NOTES.md` or the backlog, in the same PR. The owner asked for this.
+
 
 Board-driven (see the `board-driven-dev` skill, if installed): take an item from `docs/REMIX_BACKLOG.md`, branch
 `<type>/<slug>`, conventional commits, one small PR per item with a test plan. The PR gets its own `pr-N` build.

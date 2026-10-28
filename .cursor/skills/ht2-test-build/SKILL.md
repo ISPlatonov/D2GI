@@ -72,6 +72,14 @@ focus the game later, click its window. Never use open_application on the game.
     low/high beam (the game's own keys, see «Управление»). D2GI logs `Remix: player headlight switch N (auto M)`.
   - The game cursor follows the OS mouse. The Claude desktop window can sit over the right-hand menu buttons and is
     hidden in screenshots, so clicks there land in it. If a click on «Игра» does nothing, ask the owner to minimize it.
+  - **Camera:** V outside view, Del / PgDn orbit, Home / End nearer / farther.
+  - **Leaving the game:** use «Выход» → «Не сохранять». Not «Главное меню»: it freezes the picture (backlog item 10);
+    then only Alt+F4 helps (computer use needs the system key combos grant).
+  - **Launching by clicking `RTX-Play.cmd` in Explorer:** files added to the game root (e.g. `d2gi_vehicle_*.bin`,
+    `d2gi_vehscan_*.txt` from `DebugDraws`) shift the list, so zoom in and find the row before each double-click
+    (a wrong row opens WinRAR or "Open with"). Move such files to `_backup_d2gi\vehdump\` after a run.
+  - **Computer-use grants** expire after a while: re-resolve "File Explorer" (click tier), `king.exe`,
+    `nvremixbridge.exe` (full) when calls say nothing is granted.
   If you cannot see the screen, ask the owner for a screenshot and say exactly what to look at.
 
 Report in one or two lines what you saw. Then tick the PR test plan and update `docs/REMIX_BACKLOG.md`.

@@ -9,8 +9,8 @@ Status: `todo` / `in progress` / `done`.
 **What the game gives Remix** (#21 light log): no sun. Light slot 0 is re-set per object with nearby point lights (range 80) and a spot from 50 units above (cone 0.72/1.69) whose color changes per object, plus street/station lamps (Remix shows ~13 sphere lights at the start base at night). Two horizontal directional lights (white and dim blue) appear once. Ambient alternates per object (0x1D1D1D … 0x979797). Daylight in the original game is mostly ambient and vertex color, so under Remix the world is lit by the sky only: flat, "light from nowhere".
 **Done in #22:** auto exposure off (`rtx.autoExposure.enabled = False`): eye adaptation lifted night to day brightness; with it off night is dark and the station is lit by its own lamps, day (overcast) looks natural. Headlight glow `lg_head.txr` was in `ignoreTextures`; now a particle and an effect light (sphere, radius 0.3, intensity 10). Checked in game 27.10 21:3x, night and day at the start base.
 **Done in #24/#25 (merged):** a sun from the fog color (`SunStrength`), the sky dome back as Remix sky and dimmed at night, effect light intensity 1 (10 washed the station out to white at night). Checked in game 27.10 at 10:00 and 23:00.
-**In review (#26):** real player headlights: two spot lights at the truck's lamps (switch `+0x51B8`, transform `+0x204`/`+0x228` of the player vehicle `*(*(0x6D2078)+0x268)`, lamps learned from the truck's `lg_head` quads), in every camera view, following L / Ctrl+L. `rtx.suppressLightKeeping = True` makes lights go off at once (parked lights never went off before). Checked 28.10 00:5x from the cab and while orbiting the truck.
-**Also in #26:** every vehicle gets the same spot lights. Vehicles are found in the heap by vtable (`0x64CDF8` tractors, `0x64CFF4` cars, `0x65089C` buses), with lamps learned from their glows. Checked 28.10 22:0x: an oncoming car lights the road with a visible beam in the rain.
+**Done in #26 (merged 28.10):** real headlights for every vehicle: two spot lights at each vehicle's lamps, following the game's light flags (player: L / Ctrl+L), in every camera view. `rtx.suppressLightKeeping`, sphere radius 1, `d3d9.maxEnabledLights = 64`. Details: `docs/KING_EXE_NOTES.md`, `docs/REMIX_NOTES.md`.
+**Owner feedback 28.10:** first reaction was "night not dark, light not RTX" (seen at 10:00 start); asked to retest at night. Still to check: high beam, a car driving away lighting the road, street lamps with radius 1.
 **Earlier plan:** a sun. D2GI could add a directional light whose color/intensity follows the game's time of day (WEATHER.INI `sunenv_*` colors); the player's own headlights as two spot lights from the cab camera; check other vehicles' headlights while driving at night.
 
 
@@ -37,14 +37,19 @@ Hash → name table in `remix-mod/README.md`. Smoke and dust moved from sky to p
 ### 7. Game froze after toggling cab panels — todo
 27.10 18:04: after pressing F3 (info), F5 (radio), F6, F7 in the cab, the game stopped responding; `bridge64.log` ends with `Data Queue overwrite condition triggered`, no crash log. Seen once. Reproduce and check whether a panel or a camera switch causes it.
 
+### 9. Draw distance (map visible only nearby) — in progress
+The owner wants the world drawn much farther (also needed so off-screen geometry exists for light and shadows).
+Findings (`docs/KING_EXE_NOTES.md`): TRUCK.INI `[RENDER]` `dcoeff` (0.15 vs 5) does not change what is drawn; fog end (20000) and far plane (100000) are already far. The world is split into rooms; the working hypothesis is that only the player's room and its neighbours are drawn.
+**Next:** find the room selection in the renderer and draw more rooms (in memory from ddraw.dll, so it can go to the Workshop); then measure FPS and memory. Alternative to try: `rtx.antiCulling.object.enable` keeps already-seen objects outside the view.
+
+### 10. Pause menu «Главное меню» freezes the picture — todo
+28.10: in game, Esc → «Главное меню» → «Не сохранять» leaves a frozen frame (sky and ground) and the menu never shows; only Alt+F4 helps. «Выход» → «Не сохранять» works. Probably the 3D → menu switch under KeepDevice.
+
 ## In review
-- #17: `DebugDraws` frame-order dump (verified in game).
-- #18: smoke and dust as particles instead of sky.
-- #16 SkipBackdrop (items 2 and 3: sky dome and khaki ground plane hidden in any weather and time of day). Checked in game at the start base in one weather; other weather / time of day still to check.
-- #4: HUD text and digits stop flickering (verified in game).
-- #5: color-keyed textures in the managed pool, which fixes grass on car wheels (verified in game).
+- Nothing open (28.10). #27 (effect light intensity back to 10) was closed by the owner.
 
 ## Done
+- #4 HUD flicker, #5 managed-pool textures, #16 SkipBackdrop, #17 frame-order dump, #18 smoke/dust as particles, #22–#26 lighting (all merged).
 - Workshop item 3828304518 updated to `pr-18 cc5d082` by Claude (27.10 18:22), change note in Russian.
 - #13 `DebugDraws` log shows the Remix hash, vertex alpha, blend state and positions for each draw (hashes match rtx.conf entries).
 - #15 Steam Workshop package (`RTX-Workshop.cmd`); published by the owner as item 3828304518 (friends).
