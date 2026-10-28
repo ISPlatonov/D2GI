@@ -55,9 +55,50 @@ Parsed in the engine init around `0x5DC7E0`–`0x5DCD40` into a settings struct 
 
 - The world is split into rooms (`ai_room.cpp`, `RoomId`, `updatePlayerRooms()`, `getPositionId(RoomId, ...)`,
   `$$$DefaultRoom`, `UNDEFINED_ROOM`, room names like `room_at_004`). Map data: `.b3d` files with clusters.
-- Fog end (20000) and far plane (100000) are far beyond what is drawn, so they are not the limit. Working hypothesis:
-  the game draws the player's room and its neighbours (visibility lists in the map), so the distance is set by the
-  room graph. Next step: find the room selection in the renderer and add more rooms (backlog item 9).
+- **The view distance comes from WEATHER.INI** (found 28.10). TRUCK.INI `fog=on 10000 20000` and the far plane
+  default 100000 are overwritten every frame: `0x5A9700..0x5A9776` interpolates the weather tables for the time of
+  day with `0x5A9240` (cdecl `float, float, const float* table` → st0) and stores
+  fog far (`fogf_*`, table `0x6FC9B8`) → settings `+0x10`, fog near (`fogn_*`, table `0x6FCA58`) → `+0x18`,
+  far clip plane = `frpl_*` (table `0x6FD75C`) × fog far → `+0x20`. Only these three calls use `0x5A9240`
+  (`0x5A972F`, `0x5A974D`, `0x5A976B`). Weather tables are filled when WEATHER.INI is read (`0x5A83B7..`).
+- Stock WEATHER.INI: fog far 900 good day/night, 250 bad day, 100 bad night; `frpl` 0.6 (good) / 1 (bad).
+  So the far plane is ~540 units on a clear day and 100 on a bad night: this is the "map loads close" limit.
+- `DrawDistance` (#29) wraps the fog far and fog near calls and multiplies their result, so fog and the far plane
+  move out together. The alternative (shipping an edited WEATHER.INI) would overwrite players' file.
+- External references: AlexKimov/HardTruck-RignRoll-file-formats (b3d format wiki and 010 Editor template
+  `B3D.bt`), KoTR Modern Patch, KOTRunity, Blender b3d plugins.
+
+### Scene graph (b3d node classes)
+
+- Node factory by b3d block type: `switch` at `0x5EF877`, jump table `0x5F0614` (types 0..41).
+  Examples: type 10/11 → class vtable `0x652AA0` (size 0x44, +0x38 = 1 or 3); type 19/41 → `0x652D68` (size 0x140);
+  type 29 → `0x6528D8`; type 30 → `0x65288C` (size 0xC4, a portal to another room).
+- Generic group base class vtable `0x652CB4` (ctor `0x5F19B0`): children array `+0x30`, count `+0x34`.
+  `SetSwitch(node, index)` = `0x5E1A10` (node type `0x12`).
+- Render context (passed as the second argument to render methods): `+0x2108` = 100 − detail (clamped 0..100),
+  `+0x2110` near plane, `+0x2118` far plane, `+0x2148` dcoeff, `+0x8C0 + 0x30*k` camera matrices,
+  `+0x2020` / `+0x202C` stack indices. Filled each frame at `0x5EB310` from the settings struct.
+- `detail` in the settings struct is overwritten from the player profile (`[*0x6CEC70 + 0x1A6]`, WORD, at `0x512B11`),
+  i.e. the «Графика → Детальность» slider (ours is at max), so TRUCK.INI `detail` has no effect.
+- Engine object: `*0x696CA0`; settings struct `[engine + 0x1D8]`.
+
+### Culling candidates checked (28.10)
+
+- Type 29 LOD (`0x5F9F20`): picks a child by comparing `detail% × depth × 0.01` (or a screen-size metric, mode 1)
+  with per-node thresholds and draws nothing past the last one. Scaling the depth constant (`fmul [0x64B5A0]` at
+  `0x5FA1A1`) by 1/4 changed nothing measurable.
+- Type 10/11 distance switch (`0x5F8F10` → condition `0x5F88D0`): `|camera − center|` vs a radius, via the length
+  helper `0x5AB4D0` (call sites `0x5F894C`, `0x5F89B1`, `0x5F8A99`, `0x5F8B93`). Dividing the length by 4 changed
+  nothing measurable either.
+- Type 30 portal (`0x5FB820`): checks the portal against the frustum (`0x5B4FC0`, uses near/far planes) and the camera
+  side of the portal plane, then renders the connected room (`[portal + 0x80]`) clipped to the portal (`0x5B5710`).
+  Not the limit after all: the far plane is (see WEATHER.INI above).
+- Measurement: `DebugDraws` frame dumps now print each draw's depth in the world camera (`d<depth>`). At the start
+  base world draws end at depth ~216; at the dealership road ~306, with and without the patches above. The start
+  base is closed in by forest, so a spot with a long open view is needed for a fair comparison.
+- b3d LOD data (scan of `ENV/*.b3d`, 28.10): 1036 rooms (type 19), 2215 portals (type 30), 2574 type 10 switches.
+  Type 10 `Distance` p10 1059, p50 5000, p90 29062 (common 5000, 1000, 30000, 22500). The condition `0x5F88D0`
+  compares it with a real length (`0x5AB4D0` takes sqrt), so these are radii in world units, mostly past the far plane.
 
 ## Untested leads
 

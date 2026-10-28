@@ -39,8 +39,9 @@ Hash → name table in `remix-mod/README.md`. Smoke and dust moved from sky to p
 
 ### 9. Draw distance (map visible only nearby) — in progress
 The owner wants the world drawn much farther (also needed so off-screen geometry exists for light and shadows).
-Findings (`docs/KING_EXE_NOTES.md`): TRUCK.INI `[RENDER]` `dcoeff` (0.15 vs 5) does not change what is drawn; fog end (20000) and far plane (100000) are already far. The world is split into rooms; the working hypothesis is that only the player's room and its neighbours are drawn.
-**Next:** find the room selection in the renderer and draw more rooms (in memory from ddraw.dll, so it can go to the Workshop); then measure FPS and memory. Alternative to try: `rtx.antiCulling.object.enable` keeps already-seen objects outside the view.
+**Cause found (28.10):** the far clip plane and fog come from WEATHER.INI every frame (far plane = 0.6 × fog far 900 ≈ 540 units on a clear day, 100 on a bad night). LOD/switch/portal culling were not the limit. See `docs/KING_EXE_NOTES.md` → "World and draw distance".
+**#29:** `DrawDistance = 300` multiplies the weather fog far/near (and so the far plane) in memory. Earlier switch-distance patch removed.
+**Checked 29.10 (Claude, start base, rain, 10:00):** with 100 the view from the cab ends in grey right behind the first trees; with 300 the mountains and the far forest are drawn. Owner check pending: clear day, night, highway, FPS.
 
 ### 10. Pause menu «Главное меню» freezes the picture — todo
 28.10: in game, Esc → «Главное меню» → «Не сохранять» leaves a frozen frame (sky and ground) and the menu never shows; only Alt+F4 helps. «Выход» → «Не сохранять» works. Probably the 3D → menu switch under KeepDevice.

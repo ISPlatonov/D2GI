@@ -46,6 +46,7 @@ class D2GIConfig
 	static bool       s_bRemixEmitCabRain;
 	static int        s_nRemixSunStrength;
 	static int        s_nRemixHeadlights;
+	static int        s_nRemixDrawDistance;
 	static bool       s_bRemixSkyDome;
 public:
 	static HookOptions ReadFromFile();
@@ -70,6 +71,7 @@ public:
 	static bool RemixEmitCabRainEnabled() { return s_bRemixEmitCabRain; }
 	static int RemixSunStrength() { return s_nRemixSunStrength; }
 	static int RemixHeadlights() { return s_nRemixHeadlights; }
+	static int RemixDrawDistance() { return s_nRemixDrawDistance; }
 	static bool RemixSkyDomeEnabled() { return s_bRemixSkyDome; }
 
 	static std::basic_string<TCHAR> GetConfigFilePath();

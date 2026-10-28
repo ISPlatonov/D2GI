@@ -1342,9 +1342,71 @@ VOID D2GI::MaybeEmitCabRain()
 }
 
 
+// Draw distance (king.exe 8.1). The view distance comes from WEATHER.INI, not from TRUCK.INI or the b3d LOD
+// switches: every frame 0x5A9700.. interpolates the weather tables for the time of day with 0x5A9240
+// (cdecl: float, float, const float* table -> st0) and stores fog far (fogf_*, table 0x6FC9B8) in
+// settings+0x10, fog near (fogn_*, table 0x6FCA58) in settings+0x18 and the far clip plane
+// frpl_* (table 0x6FD75C) x fog far in settings+0x20. Stock values: fog far 900 on a good day, 250 bad day,
+// 100 bad night, far plane 0.6 x that. Redirect the fog far and fog near calls to a wrapper that multiplies
+// the result by DrawDistance / 100: fog and the far plane (which follows fog far) move out together.
+typedef double(__cdecl* WeatherLerpFn)(float, float, const void*);
+static double s_dDrawDistanceScale = 1.0;
+
+static double __cdecl ScaledWeatherDistance(float a, float b, const void* pTable)
+{
+	const WeatherLerpFn pfnOrig = reinterpret_cast<WeatherLerpFn>((size_t)0x5A9240);
+	return pfnOrig(a, b, pTable) * s_dDrawDistanceScale;
+}
+
+static void ApplyDrawDistancePatch()
+{
+	static bool s_bDone = false;
+	if (s_bDone)
+		return;
+	s_bDone = true;
+	const int nPercent = D2GIConfig::RemixDrawDistance();
+	if (nPercent <= 0 || nPercent == 100)
+		return;
+	const BYTE* pBase = reinterpret_cast<const BYTE*>(GetModuleHandle(nullptr));
+	const IMAGE_NT_HEADERS* pNt = reinterpret_cast<const IMAGE_NT_HEADERS*>(
+		pBase + reinterpret_cast<const IMAGE_DOS_HEADER*>(pBase)->e_lfanew);
+	if (pBase != reinterpret_cast<const BYTE*>(0x400000) || pNt->FileHeader.TimeDateStamp != 0x400502EA)
+	{
+		Logger::Log(TEXT("Remix: DrawDistance needs king.exe 8.1; not applied"));
+		return;
+	}
+	// call 0x5A9240 right after push 0x6FC9B8 (fog far) and push 0x6FCA58 (fog near).
+	static const DWORD kCallSites[] = { 0x5A972F, 0x5A974D };
+	for (DWORD site : kCallSites)
+	{
+		BYTE* p = reinterpret_cast<BYTE*>((size_t)site);
+		const DWORD target = site + 5 + *reinterpret_cast<const DWORD*>(p + 1);
+		if (p[0] != 0xE8 || target != 0x5A9240)
+		{
+			Logger::Log(TEXT("Remix: DrawDistance call site %08X does not match; not applied"), (unsigned)site);
+			return;
+		}
+	}
+	s_dDrawDistanceScale = nPercent / 100.0;
+	for (DWORD site : kCallSites)
+	{
+		BYTE* p = reinterpret_cast<BYTE*>((size_t)site);
+		DWORD dwOld = 0;
+		if (!VirtualProtect(p, 5, PAGE_EXECUTE_READWRITE, &dwOld))
+			return;
+		const DWORD rel = (DWORD)(size_t)&ScaledWeatherDistance - (site + 5);
+		CopyMemory(p + 1, &rel, 4);
+		VirtualProtect(p, 5, dwOld, &dwOld);
+		FlushInstructionCache(GetCurrentProcess(), p, 5);
+	}
+	Logger::Log(TEXT("Remix: draw distance x%.2f (weather fog and far plane)"), s_dDrawDistanceScale);
+}
+
+
 VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
 	DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags)
 {
+	ApplyDrawDistancePatch();
 	if (D2GIConfig::RemixSunStrength() > 0 && !m_bSunSetThisFrame)
 		SetRemixSun();
 
@@ -1943,8 +2005,40 @@ VOID D2GI::RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrid
 		m_pDev->GetRenderState(D3D9::D3DRS_ZWRITEENABLE, &rsZW);
 		m_pDev->GetRenderState(D3D9::D3DRS_ALPHABLENDENABLE, &rsBlend);
 		const std::string& n0 = m_lpCurrentTextures[0] != nullptr ? m_lpCurrentTextures[0]->GetDebugName() : std::string("none");
-		fprintf(m_pRemixLog, "F%u %4u pt%d v%u zw%u bl%u %s\n", m_dbg3DFrame, m_dbgFrameDraw, (int)pt, (unsigned)dwVertexCount,
-			(unsigned)rsZW, (unsigned)rsBlend, n0.empty() ? "?" : n0.c_str());
+		// Depth of the draw in the world camera: mean of up to 64 vertices, through the world and world-view matrices
+		float depth = -1.0f;
+		if ((dwFVF & 0x00E) == 0x002 && pVertexData != nullptr && dwVertexCount > 0)
+		{
+			const BYTE* pPos = static_cast<const BYTE*>(pVertexData);
+			UINT uStride = (UINT)CalcFVFStride(dwFVF);
+			if (bStrided)
+			{
+				const D3D7::D3DDRAWPRIMITIVESTRIDEDDATA* sd = static_cast<const D3D7::D3DDRAWPRIMITIVESTRIDEDDATA*>(pVertexData);
+				pPos = static_cast<const BYTE*>(sd->position.lpvData);
+				uStride = sd->position.dwStride;
+			}
+			if (pPos != nullptr)
+			{
+				const DWORD n = std::min<DWORD>(dwVertexCount, 64);
+				float c[3] = { 0, 0, 0 };
+				for (DWORD i = 0; i < n; i++)
+				{
+					const FLOAT* v = reinterpret_cast<const FLOAT*>(pPos + i * uStride);
+					c[0] += v[0]; c[1] += v[1]; c[2] += v[2];
+				}
+				c[0] /= n; c[1] /= n; c[2] /= n;
+				const FLOAT* W = m_World;
+				const float w[3] = {
+					c[0] * W[0] + c[1] * W[4] + c[2] * W[8] + W[12],
+					c[0] * W[1] + c[1] * W[5] + c[2] * W[9] + W[13],
+					c[0] * W[2] + c[1] * W[6] + c[2] * W[10] + W[14],
+				};
+				const FLOAT* V = m_WorldView;
+				depth = w[0] * V[2] + w[1] * V[6] + w[2] * V[10] + V[14];
+			}
+		}
+		fprintf(m_pRemixLog, "F%u %4u pt%d v%u zw%u bl%u d%.0f %s\n", m_dbg3DFrame, m_dbgFrameDraw, (int)pt, (unsigned)dwVertexCount,
+			(unsigned)rsZW, (unsigned)rsBlend, depth, n0.empty() ? "?" : n0.c_str());
 	}
 	if (m_dbgSeenDraws.size() >= MAX_UNIQUE_DRAWS)
 		return;

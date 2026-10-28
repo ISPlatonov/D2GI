@@ -43,6 +43,8 @@ shell is Linux and cannot run PowerShell):
    cp -r _incoming/mod/. _rtx_remix_mod/ && cp -r _incoming/_ht2rtx_tools/. _ht2rtx_tools/ && cp _incoming/RTX-*.cmd .
    cat _rtx_remix_mod/VERSION.txt
    ```
+   Commit the zip under a **new file name** each time (e.g. `_backup_d2gi\HT2-RTX-pr29-<sha>.zip`): overwriting an
+   existing `HT2-RTX.zip` left the device shell seeing the old contents. Check `VERSION.txt` after copying.
    Deleting may be blocked there. Overwriting is enough, but say if a file was renamed or removed in the bundle.
 
 **C. No access at all:** tell the owner, in Russian: «Запусти `RTX-Update.cmd -Pr N` в папке игры (или просто
@@ -68,6 +70,9 @@ focus the game later, click its window. Never use open_application on the game.
     hangs loading). Leaving a running game: Esc → «Выход» → «Не сохранять». In the main menu Enter opens «Игра»
     (useful when the Claude window covers the right-hand buttons).
   - **Intro video:** press Space to skip it at launch.
+  - **A/B of an ini switch:** edit it in `<game>\_rtx_remix_mod\d2gi.ini` (WorkshopModSync copies it at launch),
+    relaunch, start a new game and screenshot the same view (the start position is fixed). Put the value back after.
+  - Holding Up at the start for 12 s drives into the ditch and rolls the truck; Esc → «Начать сначала» resets.
   - **Night:** set `timestart=23` in TRUCK.INI (put back 10 afterwards). Headlights: **L** on/off, **Ctrl+L**
     low/high beam (the game's own keys, see «Управление»). D2GI logs `Remix: player headlight switch N (auto M)`.
   - The game cursor follows the OS mouse. The Claude desktop window can sit over the right-hand menu buttons and is
