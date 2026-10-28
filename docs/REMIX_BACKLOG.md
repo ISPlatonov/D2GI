@@ -57,6 +57,7 @@ The owner wants the world drawn much farther (also needed so off-screen geometry
 
 ## Done
 - #4 HUD flicker, #5 managed-pool textures, #16 SkipBackdrop, #17 frame-order dump, #18 smoke/dust as particles, #22–#26 lighting (all merged).
+- Workshop item 3828304518 updated to `pr-30 bba1e0b` by Claude (29.10 00:49, headlights, draw distance x3, materials).
 - Workshop item 3828304518 updated to `pr-18 cc5d082` by Claude (27.10 18:22), change note in Russian.
 - #13 `DebugDraws` log shows the Remix hash, vertex alpha, blend state and positions for each draw (hashes match rtx.conf entries).
 - #15 Steam Workshop package (`RTX-Workshop.cmd`); published by the owner as item 3828304518 (friends).
