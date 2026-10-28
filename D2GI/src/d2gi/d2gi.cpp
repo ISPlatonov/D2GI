@@ -2811,6 +2811,8 @@ VOID D2GI::ScanForVehicles(DWORD dwPlayer)
 	fprintf(f, "player %08X vtable %08X pos %.1f %.1f %.1f\n", (unsigned)dwPlayer, (unsigned)dwPlayerVt, P[9], P[10], P[11]);
 
 	int nObj = 0, nRef = 0;
+	static std::vector<DWORD> s_objs;
+	s_objs.clear();
 	MEMORY_BASIC_INFORMATION mbi;
 	BYTE* p = reinterpret_cast<BYTE*>(0x10000);
 	while (p < reinterpret_cast<BYTE*>(0x7FFE0000) && VirtualQuery(p, &mbi, sizeof(mbi)) == sizeof(mbi))
@@ -2850,11 +2852,44 @@ VOID D2GI::ScanForVehicles(DWORD dwPlayer)
 					fprintf(f, "obj %08X vt %08X pos %.1f %.1f %.1f fwd %.2f %.2f %.2f\n", (unsigned)addr, (unsigned)v,
 						m[9], m[10], m[11], m[3], m[4], m[5]);
 					nObj++;
+					s_objs.push_back(addr);
 				}
 			}
 		}
 		p = next;
 	}
 	fprintf(f, "end objs %d refs %d\n", nObj, nRef);
+
+	// Second pass: every dword that points at a found object (containers of vehicles)
+	int nRefs2 = 0;
+	p = reinterpret_cast<BYTE*>(0x10000);
+	while (!s_objs.empty() && p < reinterpret_cast<BYTE*>(0x7FFE0000) && VirtualQuery(p, &mbi, sizeof(mbi)) == sizeof(mbi))
+	{
+		BYTE* next = static_cast<BYTE*>(mbi.BaseAddress) + mbi.RegionSize;
+		const DWORD prot = mbi.Protect & 0xFF;
+		if (mbi.State == MEM_COMMIT && (mbi.Type == MEM_PRIVATE || mbi.Type == MEM_IMAGE) &&
+			(prot == PAGE_READWRITE || prot == PAGE_EXECUTE_READWRITE) && !(mbi.Protect & PAGE_GUARD))
+		{
+			const DWORD* d = static_cast<const DWORD*>(mbi.BaseAddress);
+			const size_t n = mbi.RegionSize / 4;
+			for (size_t i = 0; i < n && nRefs2 < 3000; i++)
+			{
+				const DWORD v = d[i];
+				if (v < 0x10000000 && v > 0x00800000)
+					; // objects are on the heap; keep the check cheap
+				for (DWORD o : s_objs)
+				{
+					if (v == o)
+					{
+						fprintf(f, "ref2 %08X -> %08X\n", (unsigned)(DWORD)(size_t)(d + i), (unsigned)o);
+						nRefs2++;
+						break;
+					}
+				}
+			}
+		}
+		p = next;
+	}
+	fprintf(f, "end refs2 %d\n", nRefs2);
 	fclose(f);
 }
