@@ -149,13 +149,22 @@ class D2GI
 	VOID ScanForVehicles(DWORD dwPlayer);
 	uint32_t m_dbgVehicleDumpFrame = 0;
 	FLOAT m_World[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
-	// Player lamp positions in truck coordinates (x right, y forward, z up); defaults until learned from lg_head quads
-	FLOAT m_PlayerLamp[2][3] = { { -0.9f, 6.1f, 0.05f }, { 0.85f, 6.1f, 0.05f } }; // the start truck's lamps
-	int m_nPlayerLampSamples[2] = { 0, 0 };
+	// Vehicles found in the game's heap (see UpdateVehicleList); lamp positions in vehicle coordinates
+	// (x right, y forward, z up), learned from their lg_head glow quads
+	struct TrackedVehicle { DWORD ptr; DWORD vt; FLOAT M[12]; FLOAT lamp[2][3]; int samples[2]; };
+	std::vector<TrackedVehicle> m_Vehicles;
+	DWORD m_dwVehicleScanAddr = 0x10000;
+	FLOAT m_ClassLamp[3][2][3] = {};
+	int m_ClassLampSamples[3] = {};
+	int m_nHeadlightSlots = 0;
+	VOID UpdateVehicleList();
+	VOID ScanRangeForVehicles(DWORD dwFrom, DWORD dwTo);
+	VOID AddVehicle(DWORD ptr);
+	DWORD PlayerVehiclePtr();
 	Microsoft::WRL::ComPtr<D3D9::IDirect3DTexture9> m_pPlayerGlowTex;
 	bool m_bPlayerGlowFailed = false;
 	bool ReadPlayerMatrix(FLOAT* M);
-	bool LearnPlayerLamp(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD dwVertexCount);
+	bool LearnVehicleLamp(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD dwVertexCount);
 	D3D9::IDirect3DTexture9* GetPlayerGlowTexture();
 public:
 	VOID RestoreTexture0(D2GITexture* pTex);

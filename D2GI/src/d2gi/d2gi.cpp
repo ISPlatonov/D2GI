@@ -28,8 +28,9 @@
 
 // Light slot reserved for the Remix sun (SunStrength); the game itself was seen using slots 0-1 and 9-10.
 static const DWORD REMIX_SUN_LIGHT_INDEX = 7;
-static const DWORD REMIX_HEADLIGHT_INDEX = 6;  // left; the game only ever disables 6 and 8
-static const DWORD REMIX_HEADLIGHT_INDEX2 = 8; // right
+// Headlight spot lights use slots REMIX_HEADLIGHT_BASE.. (two per vehicle); the game only uses slots below 100.
+static const DWORD REMIX_HEADLIGHT_BASE = 100;
+static const int   REMIX_MAX_LIT_VEHICLES = 16;
 
 #include <shlwapi.h>
 #include <windowsx.h>
@@ -498,7 +499,7 @@ VOID D2GI::OnClear(DWORD dwCount, D3D7::LPD3DRECT pRects, DWORD dwFlags, D3D7::D
 
 VOID D2GI::OnLightEnable(DWORD i, BOOL bEnable)
 {
-	if (D2GIConfig::RemixHeadlights() > 0 && (i == REMIX_HEADLIGHT_INDEX || i == REMIX_HEADLIGHT_INDEX2))
+	if (D2GIConfig::RemixHeadlights() > 0 && i >= REMIX_HEADLIGHT_BASE)
 		return;
 	if (D2GIConfig::RemixSunStrength() > 0 && i == REMIX_SUN_LIGHT_INDEX)
 		return;
@@ -993,7 +994,7 @@ VOID D2GI::OnTransformSet(D3D7::D3DTRANSFORMSTATETYPE eType, D3D7::D3DMATRIX* pM
 
 VOID D2GI::OnLightSet(DWORD i, D3D7::LPD3DLIGHT7 pLight)
 {
-	if (D2GIConfig::RemixHeadlights() > 0 && (i == REMIX_HEADLIGHT_INDEX || i == REMIX_HEADLIGHT_INDEX2))
+	if (D2GIConfig::RemixHeadlights() > 0 && i >= REMIX_HEADLIGHT_BASE)
 		return;
 	if (D2GIConfig::RemixSunStrength() > 0 && i == REMIX_SUN_LIGHT_INDEX)
 	{
@@ -1380,12 +1381,12 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 		else if (TextureNameIs(m_lpCurrentTextures[0], "pribor.txr"))
 			MaybeEmitCabRain();
 	}
-	// The player's own headlight glows (lg_head.txr quads in front of the player's truck): learn where the lamps are
-	// on the truck, and draw them with a texture Remix does not turn into effect lights (the Headlights spots light
-	// the road instead, in every camera view).
+	// Headlight glows (lg_head.txr quads in front of a vehicle): learn where that vehicle's lamps are and draw the
+	// glow with a texture Remix does not turn into effect lights (the Headlights spots light the road instead,
+	// whichever way the vehicle faces the camera).
 	D2GITexture* pGlowSaved = nullptr;
 	if (D2GIConfig::RemixHeadlights() > 0 && !m_bInUntexturedFix && TextureNameIs(m_lpCurrentTextures[0], "lg_head.txr") &&
-		LearnPlayerLamp(dwFVF, bStrided, pVertexData, dwVertexCount))
+		LearnVehicleLamp(dwFVF, bStrided, pVertexData, dwVertexCount))
 	{
 		D3D9::IDirect3DTexture9* pGlow = GetPlayerGlowTexture();
 		if (pGlow != nullptr)
@@ -2582,115 +2583,285 @@ VOID D2GI::SetRemixHeadlights(const FLOAT* v)
 	}
 	// Unknown exe: fall back to "on when dark"
 	const bool bSwitchOn = iSwitch < 0 ? NightFactor() < 0.35f : iSwitch > 0;
-	const bool bHigh = iSwitch == 2;
-	float M[12];
-	const bool bHaveTruck = ReadPlayerMatrix(M);
-	const bool bOn = bSwitchOn && bHaveTruck;
-	if (!bOn)
+	(void)bSwitchOn;
+	UpdateVehicleList();
+
+	float P[12];
+	const bool bHavePlayer = ReadPlayerMatrix(P);
+	const DWORD dwPlayer = PlayerVehiclePtr();
+
+	// Vehicles with their lights on, nearest to the player first
+	struct Lit { size_t idx; float d2; int beam; };
+	static std::vector<Lit> s_lit;
+	s_lit.clear();
+	for (size_t k = 0; k < m_Vehicles.size(); k++)
 	{
-		if (m_bHeadlightsOn)
+		const TrackedVehicle& tv = m_Vehicles[k];
+		int beam = 0;
+		if (tv.ptr == dwPlayer)
+			beam = iSwitch < 0 ? (NightFactor() < 0.35f ? 1 : 0) : iSwitch;
+		else
 		{
-			m_pDev->LightEnable(REMIX_HEADLIGHT_INDEX, FALSE);
-			m_pDev->LightEnable(REMIX_HEADLIGHT_INDEX2, FALSE);
-			m_bHeadlightsOn = false;
+			DWORD sw = 0, au = 0;
+			ReadGameDword(tv.ptr + 0x51B8, &sw);
+			ReadGameDword(tv.ptr + 0x51B4, &au);
+			beam = sw == 2 ? 2 : ((sw != 0 || au != 0) ? 1 : 0);
 		}
-		return;
+		if (beam == 0)
+			continue;
+		float d2 = 0.0f;
+		if (bHavePlayer)
+		{
+			const float dx = tv.M[9] - P[9], dy = tv.M[10] - P[10], dz = tv.M[11] - P[11];
+			d2 = dx * dx + dy * dy + dz * dz;
+			if (d2 > 600.0f * 600.0f)
+				continue;
+		}
+		s_lit.push_back({ k, d2, beam });
 	}
-
-	// Truck axes in world space: M rows = local X (right), Y (forward), Z (up); M[9..11] = position
-	const float* right = M;
-	const float* fwd = M + 3;
-	const float* up = M + 6;
-	const float* pos = M + 9;
-
-	// Beam: low beam tilted down, high beam almost level
-	const float tilt = bHigh ? 0.03f : 0.12f;
-	float dir[3] = { fwd[0] - up[0] * tilt, fwd[1] - up[1] * tilt, fwd[2] - up[2] * tilt };
-	const float dl = std::sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
-	if (dl > 0.0f) { dir[0] /= dl; dir[1] /= dl; dir[2] /= dl; }
+	std::sort(s_lit.begin(), s_lit.end(), [](const Lit& a, const Lit& b) { return a.d2 < b.d2; });
+	if (s_lit.size() > (size_t)REMIX_MAX_LIT_VEHICLES)
+		s_lit.resize(REMIX_MAX_LIT_VEHICLES);
 
 	// Remix ignores the diffuse level here: with constant attenuation it converts a D3D light into a light whose
 	// intensity grows with Range^2 (times rtx.lightConversionIntensityFactor). So the strength drives the range:
-	// 100 = range 600 for the low beam, 900 for the high beam.
+	// 100 = range 300 for the low beam, 450 for the high beam.
 	const float s = D2GIConfig::RemixHeadlights() / 100.0f;
-	D3D9::D3DLIGHT9 L = {};
-	L.Type = D3D9::D3DLIGHT_SPOT;
-	L.Diffuse = { 1.0f, 0.95f, 0.85f, 1.0f };
-	L.Specular = L.Diffuse;
-	L.Direction = { dir[0], dir[1], dir[2] };
-	L.Range = (bHigh ? 900.0f : 600.0f) * std::sqrt(s);
-	L.Falloff = 1.0f;
-	L.Attenuation0 = 1.0f;
-	L.Theta = bHigh ? 0.25f : 0.4f;  // full-brightness cone
-	L.Phi = bHigh ? 0.5f : 0.8f;     // outer cone
-
-	// Lamps at the learned lamp positions on the truck (local coordinates), moved a little forward so the
-	// light sphere sits in front of the bumper
-	for (int side = 0; side < 2; side++)
+	int nSlots = 0;
+	for (const Lit& lit : s_lit)
 	{
-		const float* l = m_PlayerLamp[side];
-		const float ly = l[1] + 0.6f;
-		L.Position = {
-			pos[0] + right[0] * l[0] + fwd[0] * ly + up[0] * l[2],
-			pos[1] + right[1] * l[0] + fwd[1] * ly + up[1] * l[2],
-			pos[2] + right[2] * l[0] + fwd[2] * ly + up[2] * l[2],
-		};
-		m_pDev->SetLight((side == 0 ? REMIX_HEADLIGHT_INDEX : REMIX_HEADLIGHT_INDEX2), &L);
-		m_pDev->LightEnable((side == 0 ? REMIX_HEADLIGHT_INDEX : REMIX_HEADLIGHT_INDEX2), TRUE);
+		const TrackedVehicle& tv = m_Vehicles[lit.idx];
+		const bool bHigh = lit.beam == 2;
+		const float* right = tv.M;
+		const float* fwd = tv.M + 3;
+		const float* up = tv.M + 6;
+		const float* pos = tv.M + 9;
+		const float tilt = bHigh ? 0.03f : 0.12f;
+		float dir[3] = { fwd[0] - up[0] * tilt, fwd[1] - up[1] * tilt, fwd[2] - up[2] * tilt };
+		const float dl = std::sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
+		if (dl > 0.0f) { dir[0] /= dl; dir[1] /= dl; dir[2] /= dl; }
+
+		D3D9::D3DLIGHT9 L = {};
+		L.Type = D3D9::D3DLIGHT_SPOT;
+		L.Diffuse = { 1.0f, 0.95f, 0.85f, 1.0f };
+		L.Specular = L.Diffuse;
+		L.Direction = { dir[0], dir[1], dir[2] };
+		L.Range = (bHigh ? 450.0f : 300.0f) * std::sqrt(s);
+		L.Falloff = 1.0f;
+		L.Attenuation0 = 1.0f;
+		L.Theta = bHigh ? 0.25f : 0.4f;  // full-brightness cone
+		L.Phi = bHigh ? 0.5f : 0.8f;     // outer cone
+
+		// Lamps at the vehicle's learned lamp positions, a little in front of the bumper
+		for (int side = 0; side < 2; side++)
+		{
+			const float* l = tv.lamp[side];
+			const float ly = l[1] + 0.6f;
+			L.Position = {
+				pos[0] + right[0] * l[0] + fwd[0] * ly + up[0] * l[2],
+				pos[1] + right[1] * l[0] + fwd[1] * ly + up[1] * l[2],
+				pos[2] + right[2] * l[0] + fwd[2] * ly + up[2] * l[2],
+			};
+			const DWORD slot = REMIX_HEADLIGHT_BASE + nSlots++;
+			m_pDev->SetLight(slot, &L);
+			m_pDev->LightEnable(slot, TRUE);
+		}
 	}
+	for (int k = nSlots; k < m_nHeadlightSlots; k++)
+		m_pDev->LightEnable(REMIX_HEADLIGHT_BASE + k, FALSE);
+	m_nHeadlightSlots = nSlots;
 
-	if (!m_bHeadlightsOn)
+	static int s_nMaxLogged = -1;
+	if ((int)s_lit.size() > s_nMaxLogged)
 	{
-		m_bHeadlightsOn = true;
-		static int s_nLogged = 0;
-		if (s_nLogged++ < 10)
-			Logger::Log(TEXT("Remix: player headlights on, truck at (%.1f %.1f %.1f) fwd (%.2f %.2f %.2f), lamps (%.2f %.2f %.2f) (%.2f %.2f %.2f)%s"),
-				pos[0], pos[1], pos[2], fwd[0], fwd[1], fwd[2],
-				m_PlayerLamp[0][0], m_PlayerLamp[0][1], m_PlayerLamp[0][2], m_PlayerLamp[1][0], m_PlayerLamp[1][1], m_PlayerLamp[1][2],
-				m_nPlayerLampSamples[0] > 0 && m_nPlayerLampSamples[1] > 0 ? TEXT("") : TEXT(" (default lamp positions)"));
+		s_nMaxLogged = (int)s_lit.size();
+		Logger::Log(TEXT("Remix: headlights on %d vehicle(s) (%u tracked)"), (int)s_lit.size(), (unsigned)m_Vehicles.size());
 	}
 }
 
 
 // Player vehicle transform (king.exe 8.1): vehicle+0x204 = 3 rows of 3 floats (local X right, Y forward, Z up in
 // world space), vehicle+0x228 = position. Found by dumping the vehicle while driving (d2gi_vehicle_*.bin).
-bool D2GI::ReadPlayerMatrix(FLOAT* M)
+// Every vehicle class in king.exe shares this layout and the light flags at +0x51B4 / +0x51B8.
+static bool ReadVehicleMatrix(DWORD dwVeh, FLOAT* M)
 {
-	if (ReadPlayerHeadlightSwitch(nullptr) < 0)
-		return false;
-	DWORD dwGame = 0, dwVeh = 0;
-	if (!ReadGameDword(0x6D2078, &dwGame) || dwGame < 0x10000 || !ReadGameDword(dwGame + 0x268, &dwVeh) || dwVeh < 0x10000)
-		return false;
 	if (!CopyGameMemory(M, dwVeh + 0x204, 12 * sizeof(FLOAT)))
 		return false;
 	for (int i = 0; i < 12; i++)
 		if (!std::isfinite(M[i]))
 			return false;
-	// Rows must be unit vectors
 	for (int r = 0; r < 3; r++)
 	{
 		const float l = M[r * 3] * M[r * 3] + M[r * 3 + 1] * M[r * 3 + 1] + M[r * 3 + 2] * M[r * 3 + 2];
-		if (l < 0.8f || l > 1.2f)
+		if (l < 0.95f || l > 1.05f)
 			return false;
 	}
-	return true;
+	return fabsf(M[9]) < 1.0e6f && fabsf(M[10]) < 1.0e6f && fabsf(M[11]) < 1.0e5f;
 }
 
 
-// An lg_head.txr quad: if it sits at the front of the player's truck, average its center (in truck coordinates)
-// into the left or right lamp and return true.
-bool D2GI::LearnPlayerLamp(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD dwVertexCount)
+DWORD D2GI::PlayerVehiclePtr()
 {
-	static int s_nRejectLogs = 0;
-	if (bStrided || pVertexData == nullptr || dwVertexCount == 0 || (dwFVF & 0x00E) != 0x002)
+	if (ReadPlayerHeadlightSwitch(nullptr) < 0)
+		return 0;
+	DWORD dwGame = 0, dwVeh = 0;
+	if (!ReadGameDword(0x6D2078, &dwGame) || dwGame < 0x10000 || !ReadGameDword(dwGame + 0x268, &dwVeh) || dwVeh < 0x10000)
+		return 0;
+	return dwVeh;
+}
+
+
+bool D2GI::ReadPlayerMatrix(FLOAT* M)
+{
+	const DWORD dwVeh = PlayerVehiclePtr();
+	return dwVeh != 0 && ReadVehicleMatrix(dwVeh, M);
+}
+
+
+// Vehicle classes by vtable (king.exe 8.1): tractor trucks (the player's too), cars, buses/vans. Trailers
+// (0x64CBFC) have no headlights. Default lamp positions per class until a vehicle's own glows are seen.
+static const DWORD kVehicleVtables[3] = { 0x64CDF8, 0x64CFF4, 0x65089C };
+static const float kDefaultLamps[3][2][3] = {
+	{ { -0.9f, 6.1f, 0.05f }, { 0.9f, 6.1f, 0.05f } },
+	{ { -0.65f, 2.2f, 0.0f }, { 0.65f, 2.2f, 0.0f } },
+	{ { -1.0f, 5.0f, 0.1f }, { 1.0f, 5.0f, 0.1f } },
+};
+
+static int VehicleClass(DWORD vt)
+{
+	for (int i = 0; i < 3; i++)
+		if (kVehicleVtables[i] == vt)
+			return i;
+	return -1;
+}
+
+
+// Keeps m_Vehicles up to date: drops entries whose object no longer looks like a vehicle, and walks a few MB of
+// the game's heap per frame looking for new ones (a full pass takes a few seconds).
+VOID D2GI::UpdateVehicleList()
+{
+	if (ReadPlayerHeadlightSwitch(nullptr) < 0)
+		return;
+
+	for (size_t k = 0; k < m_Vehicles.size();)
 	{
-		if (s_nRejectLogs++ < 5)
-			Logger::Log(TEXT("Remix: lg_head quad not used for the lamps (fvf 0x%X strided %d verts %u)"),
-				(unsigned)dwFVF, (int)bStrided, (unsigned)dwVertexCount);
-		return false;
+		TrackedVehicle& tv = m_Vehicles[k];
+		DWORD vt = 0;
+		if (!ReadGameDword(tv.ptr, &vt) || vt != tv.vt || !ReadVehicleMatrix(tv.ptr, tv.M))
+		{
+			m_Vehicles[k] = m_Vehicles.back();
+			m_Vehicles.pop_back();
+			continue;
+		}
+		k++;
 	}
-	float M[12];
-	if (!ReadPlayerMatrix(M))
+
+	const DWORD dwPlayer = PlayerVehiclePtr();
+	if (dwPlayer != 0)
+		AddVehicle(dwPlayer);
+
+	static DWORD s_dwSelfBase = 0, s_dwSelfEnd = 0;
+	if (s_dwSelfBase == 0)
+	{
+		MEMORY_BASIC_INFORMATION mbi;
+		HMODULE hSelf = nullptr;
+		GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+			reinterpret_cast<LPCTSTR>(&kVehicleVtables), &hSelf);
+		s_dwSelfBase = (DWORD)(size_t)hSelf;
+		const IMAGE_NT_HEADERS* pNt = reinterpret_cast<const IMAGE_NT_HEADERS*>(
+			reinterpret_cast<const BYTE*>(hSelf) + reinterpret_cast<const IMAGE_DOS_HEADER*>(hSelf)->e_lfanew);
+		s_dwSelfEnd = s_dwSelfBase + pNt->OptionalHeader.SizeOfImage;
+		(void)mbi;
+	}
+
+	size_t budget = 4 * 1024 * 1024;
+	MEMORY_BASIC_INFORMATION mbi;
+	while (budget > 0)
+	{
+		if (m_dwVehicleScanAddr < 0x10000 || m_dwVehicleScanAddr >= 0x7FFE0000)
+			m_dwVehicleScanAddr = 0x10000;
+		if (VirtualQuery(reinterpret_cast<LPCVOID>((size_t)m_dwVehicleScanAddr), &mbi, sizeof(mbi)) != sizeof(mbi))
+		{
+			m_dwVehicleScanAddr = 0x10000;
+			break;
+		}
+		const DWORD dwRegionBase = (DWORD)(size_t)mbi.BaseAddress;
+		const DWORD dwRegionEnd = dwRegionBase + (DWORD)mbi.RegionSize;
+		const DWORD prot = mbi.Protect & 0xFF;
+		const bool bScan = mbi.State == MEM_COMMIT && mbi.Type == MEM_PRIVATE &&
+			(prot == PAGE_READWRITE || prot == PAGE_EXECUTE_READWRITE) && !(mbi.Protect & PAGE_GUARD) &&
+			!(dwRegionBase >= s_dwSelfBase && dwRegionBase < s_dwSelfEnd);
+		if (!bScan)
+		{
+			m_dwVehicleScanAddr = dwRegionEnd;
+			continue;
+		}
+		const DWORD dwFrom = std::max(m_dwVehicleScanAddr, dwRegionBase) & ~3u;
+		const DWORD dwTo = (DWORD)std::min<size_t>((size_t)dwRegionEnd, (size_t)dwFrom + budget);
+		ScanRangeForVehicles(dwFrom, dwTo);
+		budget -= std::min<size_t>(budget, (size_t)(dwTo - dwFrom) + 4096);
+		m_dwVehicleScanAddr = dwTo;
+	}
+}
+
+
+// Collects addresses in [dwFrom, dwTo) whose dword is a vehicle vtable. Plain C so it can use SEH.
+static int FindVehicleVtables(DWORD dwFrom, DWORD dwTo, DWORD* pOut, int nMax)
+{
+	int n = 0;
+	__try
+	{
+		const DWORD* d = reinterpret_cast<const DWORD*>((size_t)dwFrom);
+		const DWORD* e = reinterpret_cast<const DWORD*>((size_t)dwTo);
+		for (; d + (0x234 / 4) < e && n < nMax; d++)
+		{
+			const DWORD v = *d;
+			if (v == kVehicleVtables[0] || v == kVehicleVtables[1] || v == kVehicleVtables[2])
+				pOut[n++] = (DWORD)(size_t)d;
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+	}
+	return n;
+}
+
+
+VOID D2GI::ScanRangeForVehicles(DWORD dwFrom, DWORD dwTo)
+{
+	DWORD found[256];
+	const int n = FindVehicleVtables(dwFrom, dwTo, found, 256);
+	for (int k = 0; k < n; k++)
+		AddVehicle(found[k]);
+}
+
+
+VOID D2GI::AddVehicle(DWORD ptr)
+{
+	for (const TrackedVehicle& tv : m_Vehicles)
+		if (tv.ptr == ptr)
+			return;
+	if (m_Vehicles.size() >= 256)
+		return;
+	TrackedVehicle tv = {};
+	tv.ptr = ptr;
+	if (!ReadGameDword(ptr, &tv.vt))
+		return;
+	const int cls = VehicleClass(tv.vt);
+	if (cls < 0 || !ReadVehicleMatrix(ptr, tv.M))
+		return;
+	CopyMemory(tv.lamp, kDefaultLamps[cls], sizeof(tv.lamp));
+	if (m_ClassLampSamples[cls] > 0)
+		CopyMemory(tv.lamp, m_ClassLamp[cls], sizeof(tv.lamp));
+	m_Vehicles.push_back(tv);
+}
+
+
+// An lg_head.txr quad: if it sits at the front of a tracked vehicle, average its center (in that vehicle's
+// coordinates) into the vehicle's left or right lamp and return true.
+bool D2GI::LearnVehicleLamp(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD dwVertexCount)
+{
+	if (bStrided || pVertexData == nullptr || dwVertexCount == 0 || (dwFVF & 0x00E) != 0x002 || m_Vehicles.empty())
 		return false;
 
 	const UINT uStride = (UINT)CalcFVFStride(dwFVF);
@@ -2701,44 +2872,52 @@ bool D2GI::LearnPlayerLamp(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD 
 		c[0] += p[0]; c[1] += p[1]; c[2] += p[2];
 	}
 	c[0] /= dwVertexCount; c[1] /= dwVertexCount; c[2] /= dwVertexCount;
-	// to world (row vectors: w = c * World)
 	const FLOAT* W = m_World;
 	const float w[3] = {
 		c[0] * W[0] + c[1] * W[4] + c[2] * W[8] + W[12],
 		c[0] * W[1] + c[1] * W[5] + c[2] * W[9] + W[13],
 		c[0] * W[2] + c[1] * W[6] + c[2] * W[10] + W[14],
 	};
-	// to truck coordinates
-	const float d[3] = { w[0] - M[9], w[1] - M[10], w[2] - M[11] };
-	float l[3];
-	for (int r = 0; r < 3; r++)
-		l[r] = d[0] * M[r * 3] + d[1] * M[r * 3 + 1] + d[2] * M[r * 3 + 2];
-	if (fabsf(l[0]) > 3.0f || l[1] < 1.0f || l[1] > 10.0f || fabsf(l[2]) > 3.0f)
-	{
-		if (s_nRejectLogs++ < 20)
-			Logger::Log(TEXT("Remix: lg_head quad at (%.1f %.1f %.1f), (%.2f %.2f %.2f) on the player truck: not a player lamp"),
-				w[0], w[1], w[2], l[0], l[1], l[2]);
-		return false;
-	}
 
-	const int side = l[0] < 0.0f ? 0 : 1;
-	int& n = m_nPlayerLampSamples[side];
-	float* lamp = m_PlayerLamp[side];
-	if (n == 0)
+	TrackedVehicle* best = nullptr;
+	float bestL[3] = { 0, 0, 0 }, bestD = 1e30f;
+	for (TrackedVehicle& tv : m_Vehicles)
 	{
-		lamp[0] = l[0]; lamp[1] = l[1]; lamp[2] = l[2];
+		const float d[3] = { w[0] - tv.M[9], w[1] - tv.M[10], w[2] - tv.M[11] };
+		float l[3];
+		for (int r = 0; r < 3; r++)
+			l[r] = d[0] * tv.M[r * 3] + d[1] * tv.M[r * 3 + 1] + d[2] * tv.M[r * 3 + 2];
+		if (fabsf(l[0]) > 2.0f || l[1] < 0.5f || l[1] > 10.0f || fabsf(l[2]) > 3.0f)
+			continue;
+		const float dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+		if (dd < bestD) { bestD = dd; best = &tv; CopyMemory(bestL, l, sizeof(l)); }
 	}
+	if (best == nullptr)
+		return false;
+
+	const int side = bestL[0] < 0.0f ? 0 : 1;
+	int& n = best->samples[side];
+	float* lamp = best->lamp[side];
+	if (n == 0)
+		CopyMemory(lamp, bestL, sizeof(bestL));
 	else if (n < 1000)
 	{
 		const float k = 1.0f / (float)(n + 1);
 		for (int i = 0; i < 3; i++)
-			lamp[i] += (l[i] - lamp[i]) * k;
+			lamp[i] += (bestL[i] - lamp[i]) * k;
 	}
 	if (n < 1000)
 		n++;
-	if (n == 1 || n == 100)
-		Logger::Log(TEXT("Remix: player %s lamp at (%.2f %.2f %.2f) on the truck (%d samples)"),
-			side == 0 ? TEXT("left") : TEXT("right"), lamp[0], lamp[1], lamp[2], n);
+	const int cls = VehicleClass(best->vt);
+	if (cls >= 0 && n == 20)
+	{
+		CopyMemory(m_ClassLamp[cls][side], lamp, sizeof(float) * 3);
+		m_ClassLampSamples[cls]++;
+		static int s_nLogged = 0;
+		if (s_nLogged++ < 20)
+			Logger::Log(TEXT("Remix: vehicle %08X (class %d) %s lamp at (%.2f %.2f %.2f)"), (unsigned)best->ptr, cls,
+				side == 0 ? TEXT("left") : TEXT("right"), lamp[0], lamp[1], lamp[2]);
+	}
 	return true;
 }
 
