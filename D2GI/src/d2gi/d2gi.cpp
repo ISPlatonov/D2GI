@@ -2812,7 +2812,9 @@ VOID D2GI::ScanForVehicles(DWORD dwPlayer)
 
 	int nObj = 0, nRef = 0;
 	static std::vector<DWORD> s_objs;
+	static std::vector<DWORD> s_arrays;
 	s_objs.clear();
+	s_arrays.clear();
 	MEMORY_BASIC_INFORMATION mbi;
 	BYTE* p = reinterpret_cast<BYTE*>(0x10000);
 	while (p < reinterpret_cast<BYTE*>(0x7FFE0000) && VirtualQuery(p, &mbi, sizeof(mbi)) == sizeof(mbi))
@@ -2881,8 +2883,14 @@ VOID D2GI::ScanForVehicles(DWORD dwPlayer)
 				{
 					if (v == o)
 					{
-						fprintf(f, "ref2 %08X -> %08X\n", (unsigned)(DWORD)(size_t)(d + i), (unsigned)o);
+						const DWORD at = (DWORD)(size_t)(d + i);
+						fprintf(f, "ref2 %08X -> %08X\n", (unsigned)at, (unsigned)o);
 						nRefs2++;
+						// start of a run of >= 3 object pointers: remember it as an array
+						if (i >= 1 && i + 2 < n && std::find(s_objs.begin(), s_objs.end(), d[i - 1]) == s_objs.end() &&
+							std::find(s_objs.begin(), s_objs.end(), d[i + 1]) != s_objs.end() &&
+							std::find(s_objs.begin(), s_objs.end(), d[i + 2]) != s_objs.end())
+							s_arrays.push_back(at);
 						break;
 					}
 				}
@@ -2891,5 +2899,37 @@ VOID D2GI::ScanForVehicles(DWORD dwPlayer)
 		p = next;
 	}
 	fprintf(f, "end refs2 %d\n", nRefs2);
+
+	// Third pass: who points at (or just before) each array start
+	int nRefs3 = 0;
+	p = reinterpret_cast<BYTE*>(0x10000);
+	while (!s_arrays.empty() && p < reinterpret_cast<BYTE*>(0x7FFE0000) && VirtualQuery(p, &mbi, sizeof(mbi)) == sizeof(mbi))
+	{
+		BYTE* next = static_cast<BYTE*>(mbi.BaseAddress) + mbi.RegionSize;
+		const DWORD prot = mbi.Protect & 0xFF;
+		if (mbi.State == MEM_COMMIT && (mbi.Type == MEM_PRIVATE || mbi.Type == MEM_IMAGE) &&
+			(prot == PAGE_READWRITE || prot == PAGE_EXECUTE_READWRITE) && !(mbi.Protect & PAGE_GUARD))
+		{
+			const DWORD* d = static_cast<const DWORD*>(mbi.BaseAddress);
+			const size_t n = mbi.RegionSize / 4;
+			for (size_t i = 0; i < n && nRefs3 < 500; i++)
+			{
+				const DWORD v = d[i];
+				for (DWORD a : s_arrays)
+				{
+					if (v <= a && v + 0x10 >= a)
+					{
+						const DWORD at = (DWORD)(size_t)(d + i);
+						fprintf(f, "ref3 %08X -> %08X (array %08X)  next dwords %08X %08X %08X\n", (unsigned)at, (unsigned)v, (unsigned)a,
+							i + 1 < n ? (unsigned)d[i + 1] : 0u, i + 2 < n ? (unsigned)d[i + 2] : 0u, i + 3 < n ? (unsigned)d[i + 3] : 0u);
+						nRefs3++;
+						break;
+					}
+				}
+			}
+		}
+		p = next;
+	}
+	fprintf(f, "end refs3 %d\n", nRefs3);
 	fclose(f);
 }
