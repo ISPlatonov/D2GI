@@ -1342,18 +1342,20 @@ VOID D2GI::MaybeEmitCabRain()
 }
 
 
-// Draw distance (king.exe 8.1). Distance-switch nodes (b3d types 10/11, class vtable 0x652AA0, render method
-// 0x5F8F10) ask a condition at 0x5F88D0 whether the camera is within a sphere of the node; past that radius the
-// node shows its far child, which is often empty, so objects vanish a few hundred units ahead. The condition
-// measures |camera - center| with the vector-length helper 0x5AB4D0 (cdecl, float* -> st0) at four call sites.
-// Redirect those calls to a version that divides the length by DrawDistance / 100, so every switch distance
-// is DrawDistance percent of the original.
-static double s_dSwitchDistanceScale = 1.0;
+// Draw distance (king.exe 8.1). The view distance comes from WEATHER.INI, not from TRUCK.INI or the b3d LOD
+// switches: every frame 0x5A9700.. interpolates the weather tables for the time of day with 0x5A9240
+// (cdecl: float, float, const float* table -> st0) and stores fog far (fogf_*, table 0x6FC9B8) in
+// settings+0x10, fog near (fogn_*, table 0x6FCA58) in settings+0x18 and the far clip plane
+// frpl_* (table 0x6FD75C) x fog far in settings+0x20. Stock values: fog far 900 on a good day, 250 bad day,
+// 100 bad night, far plane 0.6 x that. Redirect the fog far and fog near calls to a wrapper that multiplies
+// the result by DrawDistance / 100: fog and the far plane (which follows fog far) move out together.
+typedef double(__cdecl* WeatherLerpFn)(float, float, const void*);
+static double s_dDrawDistanceScale = 1.0;
 
-static double __cdecl ScaledSwitchDistance(const float* v)
+static double __cdecl ScaledWeatherDistance(float a, float b, const void* pTable)
 {
-	const double l = std::sqrt((double)v[0] * v[0] + (double)v[1] * v[1] + (double)v[2] * v[2]);
-	return l / s_dSwitchDistanceScale;
+	const WeatherLerpFn pfnOrig = reinterpret_cast<WeatherLerpFn>((size_t)0x5A9240);
+	return pfnOrig(a, b, pTable) * s_dDrawDistanceScale;
 }
 
 static void ApplyDrawDistancePatch()
@@ -1373,30 +1375,31 @@ static void ApplyDrawDistancePatch()
 		Logger::Log(TEXT("Remix: DrawDistance needs king.exe 8.1; not applied"));
 		return;
 	}
-	static const DWORD kCallSites[] = { 0x5F894C, 0x5F89B1, 0x5F8A99, 0x5F8B93 };
+	// call 0x5A9240 right after push 0x6FC9B8 (fog far) and push 0x6FCA58 (fog near).
+	static const DWORD kCallSites[] = { 0x5A972F, 0x5A974D };
 	for (DWORD site : kCallSites)
 	{
 		BYTE* p = reinterpret_cast<BYTE*>((size_t)site);
 		const DWORD target = site + 5 + *reinterpret_cast<const DWORD*>(p + 1);
-		if (p[0] != 0xE8 || target != 0x5AB4D0)
+		if (p[0] != 0xE8 || target != 0x5A9240)
 		{
 			Logger::Log(TEXT("Remix: DrawDistance call site %08X does not match; not applied"), (unsigned)site);
 			return;
 		}
 	}
-	s_dSwitchDistanceScale = nPercent / 100.0;
+	s_dDrawDistanceScale = nPercent / 100.0;
 	for (DWORD site : kCallSites)
 	{
 		BYTE* p = reinterpret_cast<BYTE*>((size_t)site);
 		DWORD dwOld = 0;
 		if (!VirtualProtect(p, 5, PAGE_EXECUTE_READWRITE, &dwOld))
 			return;
-		const DWORD rel = (DWORD)(size_t)&ScaledSwitchDistance - (site + 5);
+		const DWORD rel = (DWORD)(size_t)&ScaledWeatherDistance - (site + 5);
 		CopyMemory(p + 1, &rel, 4);
 		VirtualProtect(p, 5, dwOld, &dwOld);
 		FlushInstructionCache(GetCurrentProcess(), p, 5);
 	}
-	Logger::Log(TEXT("Remix: draw distance x%.2f (distance switches)"), s_dSwitchDistanceScale);
+	Logger::Log(TEXT("Remix: draw distance x%.2f (weather fog and far plane)"), s_dDrawDistanceScale);
 }
 
 

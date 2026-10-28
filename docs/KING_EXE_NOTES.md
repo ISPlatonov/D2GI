@@ -55,7 +55,18 @@ Parsed in the engine init around `0x5DC7E0`–`0x5DCD40` into a settings struct 
 
 - The world is split into rooms (`ai_room.cpp`, `RoomId`, `updatePlayerRooms()`, `getPositionId(RoomId, ...)`,
   `$$$DefaultRoom`, `UNDEFINED_ROOM`, room names like `room_at_004`). Map data: `.b3d` files with clusters.
-- Fog end (20000) and far plane (100000) are far beyond what is drawn, so they are not the limit.
+- **The view distance comes from WEATHER.INI** (found 28.10). TRUCK.INI `fog=on 10000 20000` and the far plane
+  default 100000 are overwritten every frame: `0x5A9700..0x5A9776` interpolates the weather tables for the time of
+  day with `0x5A9240` (cdecl `float, float, const float* table` → st0) and stores
+  fog far (`fogf_*`, table `0x6FC9B8`) → settings `+0x10`, fog near (`fogn_*`, table `0x6FCA58`) → `+0x18`,
+  far clip plane = `frpl_*` (table `0x6FD75C`) × fog far → `+0x20`. Only these three calls use `0x5A9240`
+  (`0x5A972F`, `0x5A974D`, `0x5A976B`). Weather tables are filled when WEATHER.INI is read (`0x5A83B7..`).
+- Stock WEATHER.INI: fog far 900 good day/night, 250 bad day, 100 bad night; `frpl` 0.6 (good) / 1 (bad).
+  So the far plane is ~540 units on a clear day and 100 on a bad night: this is the "map loads close" limit.
+- `DrawDistance` (#29) wraps the fog far and fog near calls and multiplies their result, so fog and the far plane
+  move out together. The alternative (shipping an edited WEATHER.INI) would overwrite players' file.
+- External references: AlexKimov/HardTruck-RignRoll-file-formats (b3d format wiki and 010 Editor template
+  `B3D.bt`), KoTR Modern Patch, KOTRunity, Blender b3d plugins.
 
 ### Scene graph (b3d node classes)
 
@@ -81,10 +92,13 @@ Parsed in the engine init around `0x5DC7E0`–`0x5DCD40` into a settings struct 
   nothing measurable either.
 - Type 30 portal (`0x5FB820`): checks the portal against the frustum (`0x5B4FC0`, uses near/far planes) and the camera
   side of the portal plane, then renders the connected room (`[portal + 0x80]`) clipped to the portal (`0x5B5710`).
-  This is the likely limit (rooms seen only through portals), not studied further yet.
+  Not the limit after all: the far plane is (see WEATHER.INI above).
 - Measurement: `DebugDraws` frame dumps now print each draw's depth in the world camera (`d<depth>`). At the start
   base world draws end at depth ~216; at the dealership road ~306, with and without the patches above. The start
   base is closed in by forest, so a spot with a long open view is needed for a fair comparison.
+- b3d LOD data (scan of `ENV/*.b3d`, 28.10): 1036 rooms (type 19), 2215 portals (type 30), 2574 type 10 switches.
+  Type 10 `Distance` p10 1059, p50 5000, p90 29062 (common 5000, 1000, 30000, 22500). The condition `0x5F88D0`
+  compares it with a real length (`0x5AB4D0` takes sqrt), so these are radii in world units, mostly past the far plane.
 
 ## Untested leads
 
