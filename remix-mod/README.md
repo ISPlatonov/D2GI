@@ -20,6 +20,11 @@ into `HT2-RTX.zip`; CI publishes it as the release `latest` (master) or `pr-N` (
   raindrop normal map, 4x2 sprite sheet). The hash is stable only because `StaticBlitTextures` fills
   that texture with constant content. It must stay out of `rtx.ignoreTextures`.
 
+- Surface materials (#12): grass, asphalt, wheels, tyres, truck steel parts, poles/fences, building windows,
+  trees. Roughness/metallic only, plus procedural normal maps (`grass_normal.dds`, `asphalt_normal.dds` from
+  `tools/gen_material_maps.py`, generated when the bundle is built). The game texture stays the albedo. Texture
+  names for each hash are in the comments in `mod.usda`; these are game textures, so their hashes are stable.
+
 ## Texture names in rtx.conf
 
 From `d2gi_remix.log` (`DebugDraws=1`, which logs each texture's Remix hash). "-" = not seen in the logged runs.

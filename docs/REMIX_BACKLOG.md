@@ -43,6 +43,12 @@ The owner wants the world drawn much farther (also needed so off-screen geometry
 **#29:** `DrawDistance = 300` multiplies the weather fog far/near (and so the far plane) in memory. Earlier switch-distance patch removed.
 **Checked 29.10 (Claude, start base, rain, 10:00):** with 100 the view from the cab ends in grey right behind the first trees; with 300 the mountains and the far forest are drawn. Owner check pending: clear day, night, highway, FPS.
 
+### 11. Vehicle headlights drop out — todo
+29.10, owner: our headlight light sometimes "leaks away" (moves off / disappears for a moment), and other vehicles' light sometimes suddenly drops off. Suspects: the per-frame vehicle scan (`UpdateVehicleList`, 4 MB window) losing a vehicle; the 16-nearest / 600-unit cut; lamp positions learned from glow quads (`LearnVehicleLamp`) being re-learned wrong; the game's light flag toggling. Reproduce with DebugDraws and log when a tracked vehicle is dropped or its lamp position jumps.
+
+### 12. Surface materials (grass, asphalt, metal, glass) — in progress
+29.10, owner: make surfaces look like grass or metal. First pass: roughness/metallic per texture (names → hashes from the DebugDraws log) and procedural tileable normal maps for grass and asphalt (`remix-mod/tools/gen_material_maps.py`, generated at bundle time). Truck bodies and other regions' textures are not in the log yet (unnamed or never seen).
+
 ### 10. Pause menu «Главное меню» freezes the picture — todo
 28.10: in game, Esc → «Главное меню» → «Не сохранять» leaves a frozen frame (sky and ground) and the menu never shows; only Alt+F4 helps. «Выход» → «Не сохранять» works. Probably the 3D → menu switch under KeepDevice.
 
