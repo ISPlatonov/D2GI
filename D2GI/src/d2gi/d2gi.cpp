@@ -1342,9 +1342,49 @@ VOID D2GI::MaybeEmitCabRain()
 }
 
 
+// Draw distance (king.exe 8.1). LOD nodes (b3d type 29, class vtable 0x6528D8, select method 0x5F9F20) pick a
+// child by comparing value = detail% * depth * 0.01 with the node's depth thresholds and draw nothing past the
+// last one; that is what ends the world ~200-300 units ahead. The 0.01 is `fmul qword [0x64B5A0]` at 0x5FA1A1
+// (the depth-based path; the screen-size path at 0x5FA0F1 is left alone). Point it at our own constant
+// 0.01 * 100 / DrawDistance, so DrawDistance = 400 shows LOD levels and objects 4x farther.
+static double s_dLodDepthScale = 0.01;
+
+static void ApplyDrawDistancePatch()
+{
+	static bool s_bDone = false;
+	if (s_bDone)
+		return;
+	s_bDone = true;
+	const int nPercent = D2GIConfig::RemixDrawDistance();
+	if (nPercent <= 0 || nPercent == 100)
+		return;
+	const BYTE* pBase = reinterpret_cast<const BYTE*>(GetModuleHandle(nullptr));
+	const IMAGE_NT_HEADERS* pNt = reinterpret_cast<const IMAGE_NT_HEADERS*>(
+		pBase + reinterpret_cast<const IMAGE_DOS_HEADER*>(pBase)->e_lfanew);
+	BYTE* pCode = reinterpret_cast<BYTE*>(0x5FA1A1);
+	static const BYTE kExpected[6] = { 0xDC, 0x0D, 0xA0, 0xB5, 0x64, 0x00 };
+	if (pBase != reinterpret_cast<const BYTE*>(0x400000) || pNt->FileHeader.TimeDateStamp != 0x400502EA ||
+		memcmp(pCode, kExpected, sizeof(kExpected)) != 0)
+	{
+		Logger::Log(TEXT("Remix: DrawDistance needs king.exe 8.1; not applied"));
+		return;
+	}
+	s_dLodDepthScale = 0.01 * 100.0 / (double)nPercent;
+	DWORD dwOld = 0;
+	if (!VirtualProtect(pCode, 6, PAGE_EXECUTE_READWRITE, &dwOld))
+		return;
+	const DWORD dwAddr = (DWORD)(size_t)&s_dLodDepthScale;
+	CopyMemory(pCode + 2, &dwAddr, 4);
+	VirtualProtect(pCode, 6, dwOld, &dwOld);
+	FlushInstructionCache(GetCurrentProcess(), pCode, 6);
+	Logger::Log(TEXT("Remix: draw distance x%.2f (LOD depth scale %.5f)"), nPercent / 100.0, s_dLodDepthScale);
+}
+
+
 VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,
 	DWORD dwVertexCount, WORD* pIndexData, DWORD dwIndexCount, DWORD dwFlags)
 {
+	ApplyDrawDistancePatch();
 	if (D2GIConfig::RemixSunStrength() > 0 && !m_bSunSetThisFrame)
 		SetRemixSun();
 
