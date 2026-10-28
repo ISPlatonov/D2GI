@@ -22,7 +22,9 @@ import zipfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PACKAGE = os.path.join(ROOT, "remix-mod", "package")
 GEN_RAIN = os.path.join(ROOT, "remix-mod", "tools", "gen_rain_normal.py")
-RAIN_DDS = os.path.join("rtx-remix", "mods", "HT2_RTX", "textures", "rain_glass_normal.dds")
+GEN_MATERIALS = os.path.join(ROOT, "remix-mod", "tools", "gen_material_maps.py")
+MOD_TEXTURES = os.path.join("rtx-remix", "mods", "HT2_RTX", "textures")
+RAIN_DDS = os.path.join(MOD_TEXTURES, "rain_glass_normal.dds")
 WIN_TOOLS = os.path.join(ROOT, "tools", "windows")
 WORKSHOP = os.path.join(ROOT, "remix-mod", "workshop")
 
@@ -52,6 +54,7 @@ def main():
         dds = os.path.join(mod, RAIN_DDS)
         os.makedirs(os.path.dirname(dds), exist_ok=True)
         subprocess.run([sys.executable, GEN_RAIN, dds, os.path.join(tmp, "rain_preview.png")], check=True)
+        subprocess.run([sys.executable, GEN_MATERIALS, os.path.join(mod, MOD_TEXTURES)], check=True)
 
         version = f"{args.version}\nbuilt {datetime.datetime.now(datetime.timezone.utc):%Y-%m-%d %H:%M} UTC\n"
         with open(os.path.join(mod, "VERSION.txt"), "w", encoding="utf-8") as f:
