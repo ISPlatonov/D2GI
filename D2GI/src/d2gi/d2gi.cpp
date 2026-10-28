@@ -1342,12 +1342,19 @@ VOID D2GI::MaybeEmitCabRain()
 }
 
 
-// Draw distance (king.exe 8.1). LOD nodes (b3d type 29, class vtable 0x6528D8, select method 0x5F9F20) pick a
-// child by comparing value = detail% * depth * 0.01 with the node's depth thresholds and draw nothing past the
-// last one; that is what ends the world ~200-300 units ahead. The 0.01 is `fmul qword [0x64B5A0]` at 0x5FA1A1
-// (the depth-based path; the screen-size path at 0x5FA0F1 is left alone). Point it at our own constant
-// 0.01 * 100 / DrawDistance, so DrawDistance = 400 shows LOD levels and objects 4x farther.
-static double s_dLodDepthScale = 0.01;
+// Draw distance (king.exe 8.1). Distance-switch nodes (b3d types 10/11, class vtable 0x652AA0, render method
+// 0x5F8F10) ask a condition at 0x5F88D0 whether the camera is within a sphere of the node; past that radius the
+// node shows its far child, which is often empty, so objects vanish a few hundred units ahead. The condition
+// measures |camera - center| with the vector-length helper 0x5AB4D0 (cdecl, float* -> st0) at four call sites.
+// Redirect those calls to a version that divides the length by DrawDistance / 100, so every switch distance
+// is DrawDistance percent of the original.
+static double s_dSwitchDistanceScale = 1.0;
+
+static double __cdecl ScaledSwitchDistance(const float* v)
+{
+	const double l = std::sqrt((double)v[0] * v[0] + (double)v[1] * v[1] + (double)v[2] * v[2]);
+	return l / s_dSwitchDistanceScale;
+}
 
 static void ApplyDrawDistancePatch()
 {
@@ -1361,23 +1368,35 @@ static void ApplyDrawDistancePatch()
 	const BYTE* pBase = reinterpret_cast<const BYTE*>(GetModuleHandle(nullptr));
 	const IMAGE_NT_HEADERS* pNt = reinterpret_cast<const IMAGE_NT_HEADERS*>(
 		pBase + reinterpret_cast<const IMAGE_DOS_HEADER*>(pBase)->e_lfanew);
-	BYTE* pCode = reinterpret_cast<BYTE*>(0x5FA1A1);
-	static const BYTE kExpected[6] = { 0xDC, 0x0D, 0xA0, 0xB5, 0x64, 0x00 };
-	if (pBase != reinterpret_cast<const BYTE*>(0x400000) || pNt->FileHeader.TimeDateStamp != 0x400502EA ||
-		memcmp(pCode, kExpected, sizeof(kExpected)) != 0)
+	if (pBase != reinterpret_cast<const BYTE*>(0x400000) || pNt->FileHeader.TimeDateStamp != 0x400502EA)
 	{
 		Logger::Log(TEXT("Remix: DrawDistance needs king.exe 8.1; not applied"));
 		return;
 	}
-	s_dLodDepthScale = 0.01 * 100.0 / (double)nPercent;
-	DWORD dwOld = 0;
-	if (!VirtualProtect(pCode, 6, PAGE_EXECUTE_READWRITE, &dwOld))
-		return;
-	const DWORD dwAddr = (DWORD)(size_t)&s_dLodDepthScale;
-	CopyMemory(pCode + 2, &dwAddr, 4);
-	VirtualProtect(pCode, 6, dwOld, &dwOld);
-	FlushInstructionCache(GetCurrentProcess(), pCode, 6);
-	Logger::Log(TEXT("Remix: draw distance x%.2f (LOD depth scale %.5f)"), nPercent / 100.0, s_dLodDepthScale);
+	static const DWORD kCallSites[] = { 0x5F894C, 0x5F89B1, 0x5F8A99, 0x5F8B93 };
+	for (DWORD site : kCallSites)
+	{
+		BYTE* p = reinterpret_cast<BYTE*>((size_t)site);
+		const DWORD target = site + 5 + *reinterpret_cast<const DWORD*>(p + 1);
+		if (p[0] != 0xE8 || target != 0x5AB4D0)
+		{
+			Logger::Log(TEXT("Remix: DrawDistance call site %08X does not match; not applied"), (unsigned)site);
+			return;
+		}
+	}
+	s_dSwitchDistanceScale = nPercent / 100.0;
+	for (DWORD site : kCallSites)
+	{
+		BYTE* p = reinterpret_cast<BYTE*>((size_t)site);
+		DWORD dwOld = 0;
+		if (!VirtualProtect(p, 5, PAGE_EXECUTE_READWRITE, &dwOld))
+			return;
+		const DWORD rel = (DWORD)(size_t)&ScaledSwitchDistance - (site + 5);
+		CopyMemory(p + 1, &rel, 4);
+		VirtualProtect(p, 5, dwOld, &dwOld);
+		FlushInstructionCache(GetCurrentProcess(), p, 5);
+	}
+	Logger::Log(TEXT("Remix: draw distance x%.2f (distance switches)"), s_dSwitchDistanceScale);
 }
 
 
