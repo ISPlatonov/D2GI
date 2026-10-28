@@ -1943,8 +1943,40 @@ VOID D2GI::RemixDebugLogDraw(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrid
 		m_pDev->GetRenderState(D3D9::D3DRS_ZWRITEENABLE, &rsZW);
 		m_pDev->GetRenderState(D3D9::D3DRS_ALPHABLENDENABLE, &rsBlend);
 		const std::string& n0 = m_lpCurrentTextures[0] != nullptr ? m_lpCurrentTextures[0]->GetDebugName() : std::string("none");
-		fprintf(m_pRemixLog, "F%u %4u pt%d v%u zw%u bl%u %s\n", m_dbg3DFrame, m_dbgFrameDraw, (int)pt, (unsigned)dwVertexCount,
-			(unsigned)rsZW, (unsigned)rsBlend, n0.empty() ? "?" : n0.c_str());
+		// Depth of the draw in the world camera: mean of up to 64 vertices, through the world and world-view matrices
+		float depth = -1.0f;
+		if ((dwFVF & 0x00E) == 0x002 && pVertexData != nullptr && dwVertexCount > 0)
+		{
+			const BYTE* pPos = static_cast<const BYTE*>(pVertexData);
+			UINT uStride = (UINT)CalcFVFStride(dwFVF);
+			if (bStrided)
+			{
+				const D3D7::D3DDRAWPRIMITIVESTRIDEDDATA* sd = static_cast<const D3D7::D3DDRAWPRIMITIVESTRIDEDDATA*>(pVertexData);
+				pPos = static_cast<const BYTE*>(sd->position.lpvData);
+				uStride = sd->position.dwStride;
+			}
+			if (pPos != nullptr)
+			{
+				const DWORD n = std::min<DWORD>(dwVertexCount, 64);
+				float c[3] = { 0, 0, 0 };
+				for (DWORD i = 0; i < n; i++)
+				{
+					const FLOAT* v = reinterpret_cast<const FLOAT*>(pPos + i * uStride);
+					c[0] += v[0]; c[1] += v[1]; c[2] += v[2];
+				}
+				c[0] /= n; c[1] /= n; c[2] /= n;
+				const FLOAT* W = m_World;
+				const float w[3] = {
+					c[0] * W[0] + c[1] * W[4] + c[2] * W[8] + W[12],
+					c[0] * W[1] + c[1] * W[5] + c[2] * W[9] + W[13],
+					c[0] * W[2] + c[1] * W[6] + c[2] * W[10] + W[14],
+				};
+				const FLOAT* V = m_WorldView;
+				depth = w[0] * V[2] + w[1] * V[6] + w[2] * V[10] + V[14];
+			}
+		}
+		fprintf(m_pRemixLog, "F%u %4u pt%d v%u zw%u bl%u d%.0f %s\n", m_dbg3DFrame, m_dbgFrameDraw, (int)pt, (unsigned)dwVertexCount,
+			(unsigned)rsZW, (unsigned)rsBlend, depth, n0.empty() ? "?" : n0.c_str());
 	}
 	if (m_dbgSeenDraws.size() >= MAX_UNIQUE_DRAWS)
 		return;
