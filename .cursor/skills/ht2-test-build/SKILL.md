@@ -67,6 +67,9 @@ focus the game later, click its window. Never use open_application on the game.
     draws no rain streaks at all, only the windshield effect. Do not edit `wstart`/`wtemp` in TRUCK.INI (`wtemp=0`
     hangs loading). Leaving a running game: Esc → «Выход» → «Не сохранять». In the main menu Enter opens «Игра»
     (useful when the Claude window covers the right-hand buttons).
+  - **Intro video:** press Space to skip it at launch.
+  - **Night:** set `timestart=23` in TRUCK.INI (put back 10 afterwards). Headlights: **L** on/off, **Ctrl+L**
+    low/high beam (the game's own keys, see «Управление»). D2GI logs `Remix: player headlight switch N (auto M)`.
   - The game cursor follows the OS mouse. The Claude desktop window can sit over the right-hand menu buttons and is
     hidden in screenshots, so clicks there land in it. If a click on «Игра» does nothing, ask the owner to minimize it.
   If you cannot see the screen, ask the owner for a screenshot and say exactly what to look at.
