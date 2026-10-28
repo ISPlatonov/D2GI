@@ -6,6 +6,7 @@ Status: `todo` / `in progress` / `done`.
 ## Ready
 
 ### 8. Lighting — in progress
+**Status 28.10:** the owner keeps master (sun #24, sky dome #25) with headlight effect lights at intensity 10, as in variant C. The real-headlights work in #26 is on hold (draft): the owner found the night too bright and the beams not ray-traced looking.
 **What the game gives Remix** (#21 light log): no sun. Light slot 0 is re-set per object with nearby point lights (range 80) and a spot from 50 units above (cone 0.72/1.69) whose color changes per object, plus street/station lamps (Remix shows ~13 sphere lights at the start base at night). Two horizontal directional lights (white and dim blue) appear once. Ambient alternates per object (0x1D1D1D … 0x979797). Daylight in the original game is mostly ambient and vertex color, so under Remix the world is lit by the sky only: flat, "light from nowhere".
 **Done in #22:** auto exposure off (`rtx.autoExposure.enabled = False`): eye adaptation lifted night to day brightness; with it off night is dark and the station is lit by its own lamps, day (overcast) looks natural. Headlight glow `lg_head.txr` was in `ignoreTextures`; now a particle and an effect light (sphere, radius 0.3, intensity 10). Checked in game 27.10 21:3x, night and day at the start base.
 **Next:** a sun. D2GI could add a directional light whose color/intensity follows the game's time of day (WEATHER.INI `sunenv_*` colors); the player's own headlights as two spot lights from the cab camera; check other vehicles' headlights while driving at night.
