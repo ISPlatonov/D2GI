@@ -146,6 +146,7 @@ class D2GI
 	VOID SetRemixHeadlights(const FLOAT* pView);
 	bool IsDumpFrame() const;
 	VOID DumpPlayerVehicle(const FLOAT* pView);
+	VOID ScanForVehicles(DWORD dwPlayer);
 	uint32_t m_dbgVehicleDumpFrame = 0;
 	FLOAT m_World[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
 	// Player lamp positions in truck coordinates (x right, y forward, z up); defaults until learned from lg_head quads

@@ -2548,6 +2548,8 @@ VOID D2GI::DumpPlayerVehicle(const FLOAT* v)
 	static BYTE s_buf[0x6000];
 	if (!CopyGameMemory(s_buf, dwVeh, sizeof(s_buf)))
 		return;
+	if (m_dbg3DFrame == 1800 || m_dbg3DFrame == 4200)
+		ScanForVehicles(dwVeh);
 	char name[64];
 	sprintf_s(name, "d2gi_vehicle_%u.bin", m_dbg3DFrame);
 	FILE* f = nullptr;
@@ -2788,4 +2790,71 @@ D3D9::IDirect3DTexture9* D2GI::GetPlayerGlowTexture()
 VOID D2GI::RestoreTexture0(D2GITexture* pTex)
 {
 	m_pDev->SetTexture(0, pTex != nullptr ? pTex->GetD3D9Texture() : nullptr);
+}
+
+
+// DebugDraws: find vehicle-like objects. Walks committed read-write private memory and lists every address
+// whose dword is a vtable in king.exe (.rdata) and whose +0x204 holds three unit rows and a position near the
+// player (within 3000 units). Also lists dwords that point at the player vehicle (containers).
+VOID D2GI::ScanForVehicles(DWORD dwPlayer)
+{
+	DWORD dwPlayerVt = 0;
+	ReadGameDword(dwPlayer, &dwPlayerVt);
+	float P[12];
+	if (!CopyGameMemory(P, dwPlayer + 0x204, sizeof(P)))
+		return;
+	char name[64];
+	sprintf_s(name, "d2gi_vehscan_%u.txt", m_dbg3DFrame);
+	FILE* f = nullptr;
+	if (fopen_s(&f, name, "w") != 0 || f == nullptr)
+		return;
+	fprintf(f, "player %08X vtable %08X pos %.1f %.1f %.1f\n", (unsigned)dwPlayer, (unsigned)dwPlayerVt, P[9], P[10], P[11]);
+
+	int nObj = 0, nRef = 0;
+	MEMORY_BASIC_INFORMATION mbi;
+	BYTE* p = reinterpret_cast<BYTE*>(0x10000);
+	while (p < reinterpret_cast<BYTE*>(0x7FFE0000) && VirtualQuery(p, &mbi, sizeof(mbi)) == sizeof(mbi))
+	{
+		BYTE* next = static_cast<BYTE*>(mbi.BaseAddress) + mbi.RegionSize;
+		const DWORD prot = mbi.Protect & 0xFF;
+		if (mbi.State == MEM_COMMIT && (mbi.Type == MEM_PRIVATE || mbi.Type == MEM_IMAGE) &&
+			(prot == PAGE_READWRITE || prot == PAGE_EXECUTE_READWRITE) && !(mbi.Protect & PAGE_GUARD))
+		{
+			const DWORD* d = static_cast<const DWORD*>(mbi.BaseAddress);
+			const size_t n = mbi.RegionSize / 4;
+			for (size_t i = 0; i < n; i++)
+			{
+				const DWORD v = d[i];
+				const DWORD addr = (DWORD)(size_t)(d + i);
+				if (v == dwPlayer && nRef < 400)
+				{
+					fprintf(f, "ref %08X\n", (unsigned)addr);
+					nRef++;
+				}
+				if (v < 0x64B000 || v >= 0x66C000 || i + (0x234 / 4) >= n)
+					continue;
+				const float* m = reinterpret_cast<const float*>(d + i + 0x204 / 4);
+				bool ok = true;
+				for (int r = 0; r < 3 && ok; r++)
+				{
+					const float l = m[r * 3] * m[r * 3] + m[r * 3 + 1] * m[r * 3 + 1] + m[r * 3 + 2] * m[r * 3 + 2];
+					ok = std::isfinite(l) && l > 0.98f && l < 1.02f;
+				}
+				if (!ok || !std::isfinite(m[9]) || !std::isfinite(m[10]) || !std::isfinite(m[11]))
+					continue;
+				const float dx = m[9] - P[9], dy = m[10] - P[10], dz = m[11] - P[11];
+				if (dx * dx + dy * dy + dz * dz > 3000.0f * 3000.0f)
+					continue;
+				if (nObj < 400)
+				{
+					fprintf(f, "obj %08X vt %08X pos %.1f %.1f %.1f fwd %.2f %.2f %.2f\n", (unsigned)addr, (unsigned)v,
+						m[9], m[10], m[11], m[3], m[4], m[5]);
+					nObj++;
+				}
+			}
+		}
+		p = next;
+	}
+	fprintf(f, "end objs %d refs %d\n", nObj, nRef);
+	fclose(f);
 }
