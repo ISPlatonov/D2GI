@@ -149,6 +149,9 @@ class D2GI
 	VOID ScanForVehicles(DWORD dwPlayer);
 	uint32_t m_dbgVehicleDumpFrame = 0;
 	FLOAT m_World[16] = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
+	// SingleSun: game light indices currently holding a dropped directional light, and what the game enabled
+	bool m_bGameDirLightDropped[64] = {};
+	bool m_bGameLightOn[64] = {};
 	// Vehicles found in the game's heap (see UpdateVehicleList); lamp positions in vehicle coordinates
 	// (x right, y forward, z up), learned from their lg_head glow quads
 	struct TrackedVehicle { DWORD ptr; DWORD vt; FLOAT M[12]; FLOAT lamp[2][3]; int samples[2]; };

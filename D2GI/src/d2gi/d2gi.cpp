@@ -503,6 +503,12 @@ VOID D2GI::OnLightEnable(DWORD i, BOOL bEnable)
 		return;
 	if (D2GIConfig::RemixSunStrength() > 0 && i == REMIX_SUN_LIGHT_INDEX)
 		return;
+	if (i < 64)
+	{
+		m_bGameLightOn[i] = !!bEnable;
+		if (m_bGameDirLightDropped[i])
+			bEnable = FALSE;
+	}
 	if (D2GIConfig::RemixDebugDrawsEnabled())
 	{
 		static int s_nLogged = 0;
@@ -1006,6 +1012,35 @@ VOID D2GI::OnLightSet(DWORD i, D3D7::LPD3DLIGHT7 pLight)
 		}
 		return;
 	}
+	// SingleSun: the game lights each object with its own directional lights (light 0 changes direction per
+	// object, light 1 is a white horizontal fill). Remix turns every one of them into a distant light, so with
+	// our sun the scene had several suns and shadows in several directions. Keep only our sun.
+	const bool bDropDir = D2GIConfig::RemixSingleSunEnabled() && D2GIConfig::RemixSunStrength() > 0 &&
+		pLight != nullptr && pLight->dltType == D3D7::D3DLIGHT_DIRECTIONAL;
+	if (i < 64)
+	{
+		if (bDropDir && !m_bGameDirLightDropped[i])
+		{
+			static bool s_bLogged = false;
+			if (!s_bLogged)
+			{
+				s_bLogged = true;
+				Logger::Log(TEXT("Remix: SingleSun drops the game's directional lights (first: light %u)"), (unsigned)i);
+			}
+			m_pDev->LightEnable(i, FALSE);
+		}
+		if (m_bGameDirLightDropped[i] && !bDropDir && pLight != nullptr)
+		{
+			// The index holds a non-directional light again: set it and restore what the game enabled.
+			m_bGameDirLightDropped[i] = false;
+			m_pDev->SetLight(i, (D3D9::D3DLIGHT9*)pLight);
+			m_pDev->LightEnable(i, m_bGameLightOn[i]);
+			return;
+		}
+		m_bGameDirLightDropped[i] = bDropDir;
+	}
+	if (bDropDir)
+		return;
 	// DebugDraws: log the game's fixed-function lights (RTX Remix converts them into its own lights).
 	// Log a light index again only when its type changes, at most 300 lines.
 	if (D2GIConfig::RemixDebugDrawsEnabled() && pLight != nullptr)
@@ -2530,6 +2565,39 @@ DWORD D2GI::ScaleColor(DWORD dwColor, DWORD dwScale)
 }
 
 
+// Game clock (king.exe 8.1): hour of day as a double at [*0x6F33AC + 0x58] (0..24, fractional). The game reads it
+// at 0x550562 to switch the automatic night lights (on before 5:00 and after 22:00).
+static bool ReadGameHour(double* pHour)
+{
+	static int s_iKnownExe = -1;
+	if (s_iKnownExe < 0)
+	{
+		const BYTE* pBase = reinterpret_cast<const BYTE*>(GetModuleHandle(nullptr));
+		const IMAGE_NT_HEADERS* pNt = reinterpret_cast<const IMAGE_NT_HEADERS*>(
+			pBase + reinterpret_cast<const IMAGE_DOS_HEADER*>(pBase)->e_lfanew);
+		s_iKnownExe = (pBase == reinterpret_cast<const BYTE*>(0x400000) &&
+			pNt->FileHeader.TimeDateStamp == 0x400502EA) ? 1 : 0;
+	}
+	if (!s_iKnownExe)
+		return false;
+	__try
+	{
+		const DWORD dwClock = *reinterpret_cast<volatile DWORD*>(0x6F33AC);
+		if (dwClock < 0x10000)
+			return false;
+		const double h = *reinterpret_cast<volatile double*>(dwClock + 0x58);
+		if (!(h >= 0.0 && h <= 48.0))
+			return false;
+		*pHour = std::fmod(h, 24.0);
+		return true;
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		return false;
+	}
+}
+
+
 VOID D2GI::SetRemixSun()
 {
 	m_bSunSetThisFrame = true;
@@ -2545,8 +2613,32 @@ VOID D2GI::SetRemixSun()
 	sun.Type = D3D9::D3DLIGHT_DIRECTIONAL;
 	sun.Diffuse = { r * k, g * k, b * k, 1.0f };
 	sun.Specular = sun.Diffuse;
-	// Z is up in this game (road ~20, lamps ~50). Sun from the side, ~55 degrees above the horizon.
-	const float dx = 0.45f, dy = 0.35f, dz = -0.82f;
+	// Z is up in this game (road ~20, lamps ~50). Default: sun from the side, ~55 degrees above the horizon.
+	float dx = 0.45f, dy = 0.35f, dz = -0.82f;
+	double hour = 0.0;
+	if (D2GIConfig::RemixSunFollowsTimeEnabled() && ReadGameHour(&hour))
+	{
+		// Day from 5:00 to 22:00 (the game's own night-lights hours), noon at 13:30. The sun rises in +X, goes over
+		// -Y and sets in -X; its height follows a sine with 60 degrees at noon. At night it stays low (8 degrees)
+		// on the side where it set or will rise: its color from the fog is dark then anyway.
+		const double kPi = 3.14159265358979;
+		// Step the sun every 0.05 h (3 game minutes), so Remix does not see a new distant light every frame
+		const double hq = std::floor(hour * 20.0) / 20.0;
+		const double t = (hq - 5.0) / 17.0;                         // 0 sunrise .. 1 sunset
+		const double tc = std::min(std::max(t, 0.0), 1.0);
+		const double az = kPi * tc;                                  // 0 east .. pi west
+		const double el = std::max(8.0, 60.0 * std::sin(kPi * tc)) * kPi / 180.0;
+		// Direction the light travels: from the sun towards the ground
+		dx = (float)(-std::cos(az) * std::cos(el));
+		dy = (float)(std::sin(az) * std::cos(el));
+		dz = (float)(-std::sin(el));
+		static int s_nLastHour = -1;
+		if ((int)hour != s_nLastHour)
+		{
+			s_nLastHour = (int)hour;
+			Logger::Log(TEXT("Remix: sun for %.2f h: dir (%.2f %.2f %.2f)"), hour, dx, dy, dz);
+		}
+	}
 	const float len = std::sqrt(dx * dx + dy * dy + dz * dz);
 	sun.Direction = { dx / len, dy / len, dz / len };
 	sun.Range = 10000.0f;

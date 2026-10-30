@@ -100,6 +100,11 @@ Parsed in the engine init around `0x5DC7E0`–`0x5DCD40` into a settings struct 
   Type 10 `Distance` p10 1059, p50 5000, p90 29062 (common 5000, 1000, 30000, 22500). The condition `0x5F88D0`
   compares it with a real length (`0x5AB4D0` takes sqrt), so these are radii in world units, mostly past the far plane.
 
+## Game clock
+
+- Hour of day: double at `[*0x6F33AC + 0x58]` (fractional hours). Read at `0x550562` (`ftol`, lights on if
+  hour > 22 or < 5 → vehicle `+0x51B4`). Used by `SunFollowsTime`.
+
 ## Untested leads
 
 - `VVK_BEAMS` key command (string at `0x67A8A0`, used at `0x560BD6`).

@@ -53,10 +53,12 @@ The owner wants the world drawn much farther (also needed so off-screen geometry
 28.10: in game, Esc → «Главное меню» → «Не сохранять» leaves a frozen frame (sky and ground) and the menu never shows; only Alt+F4 helps. «Выход» → «Не сохранять» works. Probably the 3D → menu switch under KeepDevice.
 
 ## In review
+- SingleSun (30.10): owner saw "three suns" (capture 23-40-56); the game's per-object directional lights became extra distant lights. Drop them, keep only our sun. Check: one shadow direction. Plus SunFollowsTime: the sun moves with the game clock (owner: shadows did not turn during the day).
 - Nothing open (28.10). #27 (effect light intensity back to 10) was closed by the owner.
 
 ## Done
 - #4 HUD flicker, #5 managed-pool textures, #16 SkipBackdrop, #17 frame-order dump, #18 smoke/dust as particles, #22–#26 lighting (all merged).
+- Workshop item 3828304518 updated to `pr-30 bba1e0b` by Claude (29.10 00:49, headlights, draw distance x3, materials).
 - Workshop item 3828304518 updated to `pr-18 cc5d082` by Claude (27.10 18:22), change note in Russian.
 - #13 `DebugDraws` log shows the Remix hash, vertex alpha, blend state and positions for each draw (hashes match rtx.conf entries).
 - #15 Steam Workshop package (`RTX-Workshop.cmd`); published by the owner as item 3828304518 (friends).

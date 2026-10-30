@@ -49,3 +49,17 @@ cloned read-only for reading.
 - Rejected: auto exposure (night as bright as day); variant B (brighter lights and ×3 conversion factor);
   first version of #26 at 10:00 ("night not dark, light not RTX"; retest at night pending).
 - Always: check in game before saying something is fixed, at the time of day where it matters (TRUCK.INI `timestart`).
+
+## Several suns (30.10)
+
+The game lights every object with its own fixed-function directional lights: light 0 changes direction from object
+to object (e.g. (-0.32 0.57 -0.76), (-0.69 0.41 -0.59), (-0.69 0.71 -0.14)), light 1 is a white horizontal fill
+(-1 0 0). Remix turns each distinct directional light into a distant light, so together with our SunStrength sun
+the owner saw "three suns" with shadows in different directions. `SingleSun = 1` drops the game's directional lights.
+
+## Sun follows the game clock (30.10)
+
+Owner: shadows must turn during the day. The game clock is a double at `[*0x6F33AC + 0x58]` (hour 0..24), the
+same value the game uses for automatic night lights (`0x550562`). `SunFollowsTime = 1` moves our sun: rises in +X at
+5:00, 60 degrees over -Y at 13:30, sets in -X at 22:00; at night it stays 8 degrees high (its color is dark then).
+Which world axis is north is not known; the path may need turning to match the sky's sun sprite.
