@@ -503,6 +503,12 @@ VOID D2GI::OnLightEnable(DWORD i, BOOL bEnable)
 		return;
 	if (D2GIConfig::RemixSunStrength() > 0 && i == REMIX_SUN_LIGHT_INDEX)
 		return;
+	if (i < 64)
+	{
+		m_bGameLightOn[i] = !!bEnable;
+		if (m_bGameDirLightDropped[i])
+			bEnable = FALSE;
+	}
 	if (D2GIConfig::RemixDebugDrawsEnabled())
 	{
 		static int s_nLogged = 0;
@@ -1006,6 +1012,35 @@ VOID D2GI::OnLightSet(DWORD i, D3D7::LPD3DLIGHT7 pLight)
 		}
 		return;
 	}
+	// SingleSun: the game lights each object with its own directional lights (light 0 changes direction per
+	// object, light 1 is a white horizontal fill). Remix turns every one of them into a distant light, so with
+	// our sun the scene had several suns and shadows in several directions. Keep only our sun.
+	const bool bDropDir = D2GIConfig::RemixSingleSunEnabled() && D2GIConfig::RemixSunStrength() > 0 &&
+		pLight != nullptr && pLight->dltType == D3D7::D3DLIGHT_DIRECTIONAL;
+	if (i < 64)
+	{
+		if (bDropDir && !m_bGameDirLightDropped[i])
+		{
+			static bool s_bLogged = false;
+			if (!s_bLogged)
+			{
+				s_bLogged = true;
+				Logger::Log(TEXT("Remix: SingleSun drops the game's directional lights (first: light %u)"), (unsigned)i);
+			}
+			m_pDev->LightEnable(i, FALSE);
+		}
+		if (m_bGameDirLightDropped[i] && !bDropDir && pLight != nullptr)
+		{
+			// The index holds a non-directional light again: set it and restore what the game enabled.
+			m_bGameDirLightDropped[i] = false;
+			m_pDev->SetLight(i, (D3D9::D3DLIGHT9*)pLight);
+			m_pDev->LightEnable(i, m_bGameLightOn[i]);
+			return;
+		}
+		m_bGameDirLightDropped[i] = bDropDir;
+	}
+	if (bDropDir)
+		return;
 	// DebugDraws: log the game's fixed-function lights (RTX Remix converts them into its own lights).
 	// Log a light index again only when its type changes, at most 300 lines.
 	if (D2GIConfig::RemixDebugDrawsEnabled() && pLight != nullptr)

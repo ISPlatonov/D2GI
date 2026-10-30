@@ -49,3 +49,10 @@ cloned read-only for reading.
 - Rejected: auto exposure (night as bright as day); variant B (brighter lights and ×3 conversion factor);
   first version of #26 at 10:00 ("night not dark, light not RTX"; retest at night pending).
 - Always: check in game before saying something is fixed, at the time of day where it matters (TRUCK.INI `timestart`).
+
+## Several suns (30.10)
+
+The game lights every object with its own fixed-function directional lights: light 0 changes direction from object
+to object (e.g. (-0.32 0.57 -0.76), (-0.69 0.41 -0.59), (-0.69 0.71 -0.14)), light 1 is a white horizontal fill
+(-1 0 0). Remix turns each distinct directional light into a distant light, so together with our SunStrength sun
+the owner saw "three suns" with shadows in different directions. `SingleSun = 1` drops the game's directional lights.
