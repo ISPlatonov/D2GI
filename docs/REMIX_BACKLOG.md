@@ -48,6 +48,7 @@ The owner wants the world drawn much farther (also needed so off-screen geometry
 
 ### 12. Surface materials (grass, asphalt, metal, glass) — in progress
 29.10, owner: make surfaces look like grass or metal. First pass: roughness/metallic per texture (names → hashes from the DebugDraws log) and procedural tileable normal maps for grass and asphalt (`remix-mod/tools/gen_material_maps.py`, generated at bundle time). Truck bodies and other regions' textures are not in the log yet (unnamed or never seen).
+**30.10:** owner: materials look unrealistic, vehicle bodies do not look real. 27 vehicle atlases (body, glass and trim in one 256x256 RGB565 texture; unnamed in the DebugDraws log) taken from a Remix capture (`rtx-remix/captures/textures/<HASH>.dds`, GLI1 = 565 with a 148-byte header). Per-atlas roughness masks by color class: paint 0.18, glass 0.04, dark trim 0.55 (`gen_vehicle_masks.py`). Truck steel parts metallic 0.7 → 0.3.
 
 ### 10. Pause menu «Главное меню» freezes the picture — todo
 28.10: in game, Esc → «Главное меню» → «Не сохранять» leaves a frozen frame (sky and ground) and the menu never shows; only Alt+F4 helps. «Выход» → «Не сохранять» works. Probably the 3D → menu switch under KeepDevice.
