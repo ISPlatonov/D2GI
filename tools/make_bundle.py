@@ -26,6 +26,7 @@ GEN_MATERIALS = os.path.join(ROOT, "remix-mod", "tools", "gen_material_maps.py")
 MOD_TEXTURES = os.path.join("rtx-remix", "mods", "HT2_RTX", "textures")
 RAIN_DDS = os.path.join(MOD_TEXTURES, "rain_glass_normal.dds")
 WIN_TOOLS = os.path.join(ROOT, "tools", "windows")
+MASKS = os.path.join(ROOT, "remix-mod", "masks")
 WORKSHOP = os.path.join(ROOT, "remix-mod", "workshop")
 
 
@@ -55,6 +56,12 @@ def main():
         os.makedirs(os.path.dirname(dds), exist_ok=True)
         subprocess.run([sys.executable, GEN_RAIN, dds, os.path.join(tmp, "rain_preview.png")], check=True)
         subprocess.run([sys.executable, GEN_MATERIALS, os.path.join(mod, MOD_TEXTURES)], check=True)
+        # Vehicle roughness masks (PNG in git) -> uncompressed DDS next to the other mod textures
+        from PIL import Image
+        for name in sorted(os.listdir(MASKS)):
+            if name.endswith(".png"):
+                Image.open(os.path.join(MASKS, name)).convert("RGBA").save(
+                    os.path.join(mod, MOD_TEXTURES, name[:-4] + ".dds"))
 
         version = f"{args.version}\nbuilt {datetime.datetime.now(datetime.timezone.utc):%Y-%m-%d %H:%M} UTC\n"
         with open(os.path.join(mod, "VERSION.txt"), "w", encoding="utf-8") as f:

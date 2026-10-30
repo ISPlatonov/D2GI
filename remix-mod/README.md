@@ -25,6 +25,11 @@ into `HT2-RTX.zip`; CI publishes it as the release `latest` (master) or `pr-N` (
   `tools/gen_material_maps.py`, generated when the bundle is built). The game texture stays the albedo. Texture
   names for each hash are in the comments in `mod.usda`; these are game textures, so their hashes are stable.
 
+- Vehicle atlases (#12, 30.10): 27 hashes, listed with the vehicle in `mod.usda`. Roughness masks are in
+  `remix-mod/masks/<HASH>_rough.png`, made once by `tools/gen_vehicle_masks.py` from atlases decoded from a Remix
+  capture (only the masks are kept, not game pixels), and converted to DDS by `make_bundle.py`. To add a vehicle:
+  capture, decode its `captures/textures/<HASH>.dds` to PNG, run the tool, add an `over "mat_<HASH>"` block.
+
 ## Texture names in rtx.conf
 
 From `d2gi_remix.log` (`DebugDraws=1`, which logs each texture's Remix hash). "-" = not seen in the logged runs.
