@@ -53,7 +53,7 @@ The owner wants the world drawn much farther (also needed so off-screen geometry
 28.10: in game, Esc → «Главное меню» → «Не сохранять» leaves a frozen frame (sky and ground) and the menu never shows; only Alt+F4 helps. «Выход» → «Не сохранять» works. Probably the 3D → menu switch under KeepDevice.
 
 ## In review
-- SingleSun (30.10): owner saw "three suns" (capture 23-40-56); the game's per-object directional lights became extra distant lights. Drop them, keep only our sun. Check: one shadow direction.
+- SingleSun (30.10): owner saw "three suns" (capture 23-40-56); the game's per-object directional lights became extra distant lights. Drop them, keep only our sun. Check: one shadow direction. Plus SunFollowsTime: the sun moves with the game clock (owner: shadows did not turn during the day).
 - Nothing open (28.10). #27 (effect light intensity back to 10) was closed by the owner.
 
 ## Done
