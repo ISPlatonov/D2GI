@@ -43,16 +43,18 @@ The owner wants the world drawn much farther (also needed so off-screen geometry
 **#29:** `DrawDistance = 300` multiplies the weather fog far/near (and so the far plane) in memory. Earlier switch-distance patch removed.
 **Checked 29.10 (Claude, start base, rain, 10:00):** with 100 the view from the cab ends in grey right behind the first trees; with 300 the mountains and the far forest are drawn. Owner check pending: clear day, night, highway, FPS.
 
-### 11. Vehicle headlights drop out — todo
+### 11. Vehicle headlights drop out — in review
 29.10, owner: our headlight light sometimes "leaks away" (moves off / disappears for a moment), and other vehicles' light sometimes suddenly drops off. Suspects: the per-frame vehicle scan (`UpdateVehicleList`, 4 MB window) losing a vehicle; the 16-nearest / 600-unit cut; lamp positions learned from glow quads (`LearnVehicleLamp`) being re-learned wrong; the game's light flag toggling. Reproduce with DebugDraws and log when a tracked vehicle is dropped or its lamp position jumps.
+31.10 (#39, from reading the code): a single bad transform read dropped a vehicle until the 4 MB/frame scan found it again (seconds without light) - now kept up to ~2 s with its last transform. After 20 samples a lamp ignores glows farther than 0.5 from it (an untracked car's glow ahead dragged our lamp forward). Light radius 600 -> 1000 (DrawDistance x3). Needs the owner's check in traffic.
 
 ### 12. Surface materials (grass, asphalt, metal, glass) — in progress
 29.10, owner: make surfaces look like grass or metal. First pass: roughness/metallic per texture (names → hashes from the DebugDraws log) and procedural tileable normal maps for grass and asphalt (`remix-mod/tools/gen_material_maps.py`, generated at bundle time). Truck bodies and other regions' textures are not in the log yet (unnamed or never seen).
 **30.10:** owner: materials look unrealistic, vehicle bodies do not look real. 27 vehicle atlases (body, glass and trim in one 256x256 RGB565 texture; unnamed in the DebugDraws log) taken from a Remix capture (`rtx-remix/captures/textures/<HASH>.dds`, GLI1 = 565 with a 148-byte header). Per-atlas roughness masks by color class: paint 0.18, glass 0.04, dark trim 0.55 (`gen_vehicle_masks.py`). Truck steel parts metallic 0.7 → 0.3.
 **31.10:** highway roadside, gas station, meadow, trees, sports car (#33); asphalt normal softer (looked like crumpled foil near the truck). River water: dark glossy opaque with our own color (the game's turquoise looked like a pool) and a ripple normal map. Flowing ripples (8 s loop, owner: 4x slower than the first try). Dam spillway waterfall: own animated foam albedo + normal (1 s loop, falling along V), dam concrete.
 
-### 13. Mountain backdrops stay bright at night — todo
+### 13. Mountain backdrops stay bright at night — in review
 31.10 (owner's screenshots): at night the sky is dark but the mountain skybox images (`skyBoxTextures`, e.g. 172E71FD33DEDF0E, 409C83E1829A1815, FEBCB5E0E999B867) glow at full brightness. Dim them like the sky dome (stage-1 TFACTOR by `SkyDomeScale()`), matched by Remix hash.
+31.10: the mountains are 172E71FD33DEDF0E, 409C83E1829A1815, FEBCB5E0E999B867 (the other sky images are clouds). The game dims them only through fog (off in Remix). Checked in game 31.10 (Claude, 23:00 start): mountains are dark silhouettes. `NightBackdrops = 1` modulates them in stage 1 by the sky dome's night factor; texture hashes are cached per texture.
 
 ### 10. Pause menu «Главное меню» freezes the picture — todo
 28.10: in game, Esc → «Главное меню» → «Не сохранять» leaves a frozen frame (sky and ground) and the menu never shows; only Alt+F4 helps. «Выход» → «Не сохранять» works. Probably the 3D → menu switch under KeepDevice.

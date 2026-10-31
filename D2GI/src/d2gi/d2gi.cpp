@@ -1526,6 +1526,55 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 		~GlowMaterialRestore() { if (b) p->RestoreMaterial(); }
 	} glowMaterialRestore = { this, bGlowMaterial };
 
+	// NightBackdrops: the mountain skybox images (rtx.skyBoxTextures) are lit by nothing and the game darkens them
+	// only with fog, which Remix does not use, so at night they glowed as by day. Modulate them in stage 1 by the
+	// same night factor as the sky dome. Matched by Remix hash of the 256x256 mountain textures.
+	struct StageRestore {
+		D3D9::IDirect3DDevice9* d; bool b; DWORD tf, op, a1, a2, aop, aa1;
+		~StageRestore()
+		{
+			if (!b)
+				return;
+			d->SetRenderState(D3D9::D3DRS_TEXTUREFACTOR, tf);
+			d->SetTextureStageState(1, D3D9::D3DTSS_COLORARG1, a1);
+			d->SetTextureStageState(1, D3D9::D3DTSS_COLORARG2, a2);
+			d->SetTextureStageState(1, D3D9::D3DTSS_ALPHAARG1, aa1);
+			d->SetTextureStageState(1, D3D9::D3DTSS_COLOROP, op);
+			d->SetTextureStageState(1, D3D9::D3DTSS_ALPHAOP, aop);
+		}
+	} backdropRestore = { m_pDev, false };
+	if (D2GIConfig::RemixNightBackdropsEnabled() && !m_bInUntexturedFix && m_lpCurrentTextures[0] != nullptr &&
+		m_lpCurrentTextures[0]->GetWidth() == 256 && m_lpCurrentTextures[0]->GetHeight() == 256 &&
+		m_dbgStageState[1][D3D7::D3DTSS_COLOROP] == D3D7::D3DTOP_DISABLE)
+	{
+		static const unsigned long long kMountains[] = { 0x172E71FD33DEDF0Eull, 0x409C83E1829A1815ull, 0xFEBCB5E0E999B867ull };
+		const unsigned long long h = CachedTextureHash(m_lpCurrentTextures[0]);
+		if (std::find(std::begin(kMountains), std::end(kMountains), h) != std::end(kMountains))
+		{
+			StageRestore& r = backdropRestore;
+			r.b = true;
+			m_pDev->GetRenderState(D3D9::D3DRS_TEXTUREFACTOR, &r.tf);
+			m_pDev->GetTextureStageState(1, D3D9::D3DTSS_COLOROP, &r.op);
+			m_pDev->GetTextureStageState(1, D3D9::D3DTSS_COLORARG1, &r.a1);
+			m_pDev->GetTextureStageState(1, D3D9::D3DTSS_COLORARG2, &r.a2);
+			m_pDev->GetTextureStageState(1, D3D9::D3DTSS_ALPHAOP, &r.aop);
+			m_pDev->GetTextureStageState(1, D3D9::D3DTSS_ALPHAARG1, &r.aa1);
+			const DWORD k = SkyDomeScale();
+			m_pDev->SetRenderState(D3D9::D3DRS_TEXTUREFACTOR, 0xFF000000 | (k << 16) | (k << 8) | k);
+			m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLOROP, D3D9::D3DTOP_MODULATE);
+			m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLORARG1, D3DTA_CURRENT);
+			m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLORARG2, D3DTA_TFACTOR);
+			m_pDev->SetTextureStageState(1, D3D9::D3DTSS_ALPHAOP, D3D9::D3DTOP_SELECTARG1);
+			m_pDev->SetTextureStageState(1, D3D9::D3DTSS_ALPHAARG1, D3DTA_CURRENT);
+			static bool s_bLogged = false;
+			if (!s_bLogged)
+			{
+				s_bLogged = true;
+				Logger::Log(TEXT("Remix: NightBackdrops dims mountain backdrop %016llX by %u/255"), h, (unsigned)k);
+			}
+		}
+	}
+
 	// Backdrop: the game first draws an untextured sky dome and a flat ground plane around the camera with
 	// z-write off. Under Remix they cover the world (sky) or lie over roads (khaki plane), and their
 	// UntexturedColors hash changes with weather and time of day. No other untextured 3D draw has z-write off.
@@ -2661,6 +2710,14 @@ VOID D2GI::SetRemixSun()
 		dx = (float)(-std::cos(az) * std::cos(el));
 		dy = (float)(std::sin(az) * std::cos(el));
 		dz = (float)(-std::sin(el));
+		// A low sun shines through more air: dimmer and warmer. Without this, slopes facing a sun near the horizon
+		// got full noon light and looked white (owner, 31.10). f = 1 at 60 degrees, ~0.16 at 8 degrees.
+		const float f = (float)(std::sin(el) / std::sin(60.0 * kPi / 180.0));
+		const float att = 0.3f + 0.7f * f;
+		sun.Diffuse.r *= att;
+		sun.Diffuse.g *= att * (0.8f + 0.2f * f);
+		sun.Diffuse.b *= att * (0.55f + 0.45f * f);
+		sun.Specular = sun.Diffuse;
 		static int s_nLastHour = -1;
 		if ((int)hour != s_nLastHour)
 		{
@@ -2812,6 +2869,8 @@ VOID D2GI::SetRemixHeadlights(const FLOAT* v)
 	for (size_t k = 0; k < m_Vehicles.size(); k++)
 	{
 		const TrackedVehicle& tv = m_Vehicles[k];
+		if (tv.misses > 10)
+			continue;
 		int beam = 0;
 		if (tv.ptr == dwPlayer)
 			beam = iSwitch < 0 ? (NightFactor() < 0.35f ? 1 : 0) : iSwitch;
@@ -2829,7 +2888,8 @@ VOID D2GI::SetRemixHeadlights(const FLOAT* v)
 		{
 			const float dx = tv.M[9] - P[9], dy = tv.M[10] - P[10], dz = tv.M[11] - P[11];
 			d2 = dx * dx + dy * dy + dz * dz;
-			if (d2 > 600.0f * 600.0f)
+			// 1000: with DrawDistance x3, cars farther than the old 600 are visible and lost their light
+			if (d2 > 1000.0f * 1000.0f)
 				continue;
 		}
 		s_lit.push_back({ k, d2, beam });
@@ -2962,7 +3022,22 @@ VOID D2GI::UpdateVehicleList()
 	{
 		TrackedVehicle& tv = m_Vehicles[k];
 		DWORD vt = 0;
-		if (!ReadGameDword(tv.ptr, &vt) || vt != tv.vt || !ReadVehicleMatrix(tv.ptr, tv.M))
+		if (!ReadGameDword(tv.ptr, &vt) || vt != tv.vt)
+		{
+			m_Vehicles[k] = m_Vehicles.back();
+			m_Vehicles.pop_back();
+			continue;
+		}
+		// A transform that fails the sanity check for a frame or two (e.g. mid-update) used to drop the vehicle,
+		// and it came back only when the memory scan reached it again, seconds later: its lights went out for that
+		// time (owner, 29.10). Keep it with its last good transform; give up after ~2 s of bad reads.
+		float M[12];
+		if (ReadVehicleMatrix(tv.ptr, M))
+		{
+			CopyMemory(tv.M, M, sizeof(M));
+			tv.misses = 0;
+		}
+		else if (++tv.misses > 120)
 		{
 			m_Vehicles[k] = m_Vehicles.back();
 			m_Vehicles.pop_back();
@@ -3113,6 +3188,14 @@ bool D2GI::LearnVehicleLamp(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD
 	const int side = bestL[0] < 0.0f ? 0 : 1;
 	int& n = best->samples[side];
 	float* lamp = best->lamp[side];
+	// Once a lamp is known, ignore glows far from it: a glow of an untracked car just ahead also lands in the box
+	// and used to drag our lamp (and our headlight) forward, away from the truck (owner, 29.10).
+	if (n >= 20)
+	{
+		const float e[3] = { bestL[0] - lamp[0], bestL[1] - lamp[1], bestL[2] - lamp[2] };
+		if (e[0] * e[0] + e[1] * e[1] + e[2] * e[2] > 0.5f * 0.5f)
+			return true;
+	}
 	if (n == 0)
 		CopyMemory(lamp, bestL, sizeof(bestL));
 	else if (n < 1000)
@@ -3326,4 +3409,32 @@ VOID D2GI::ScanForVehicles(DWORD dwPlayer)
 	}
 	fprintf(f, "end refs3 %d\n", nRefs3);
 	fclose(f);
+}
+
+
+unsigned long long D2GI::CachedTextureHash(D2GITexture* pTex)
+{
+	auto it = m_TexHashCache.find(pTex);
+	if (it != m_TexHashCache.end())
+		return it->second;
+	unsigned long long h = 0;
+	D3D9::IDirect3DTexture9* pD3DTex = pTex->GetD3D9Texture();
+	D3D9::D3DSURFACE_DESC desc;
+	if (pD3DTex != nullptr && SUCCEEDED(pD3DTex->GetLevelDesc(0, &desc)))
+	{
+		const UINT bpp = BytesPerPixel(desc.Format);
+		D3D9::D3DLOCKED_RECT lr;
+		if (bpp != 0 && SUCCEEDED(pD3DTex->LockRect(0, &lr, nullptr, D3DLOCK_READONLY)))
+		{
+			XXH3_state_t* st = XXH3_createState();
+			XXH3_64bits_reset(st);
+			for (UINT y = 0; y < desc.Height; y++)
+				XXH3_64bits_update(st, static_cast<const BYTE*>(lr.pBits) + (size_t)y * lr.Pitch, (size_t)desc.Width * bpp);
+			h = XXH3_64bits_digest(st);
+			XXH3_freeState(st);
+			pD3DTex->UnlockRect(0);
+		}
+	}
+	m_TexHashCache[pTex] = h;
+	return h;
 }
