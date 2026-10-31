@@ -54,7 +54,7 @@ The owner wants the world drawn much farther (also needed so off-screen geometry
 
 ### 13. Mountain backdrops stay bright at night — in review
 31.10 (owner's screenshots): at night the sky is dark but the mountain skybox images (`skyBoxTextures`, e.g. 172E71FD33DEDF0E, 409C83E1829A1815, FEBCB5E0E999B867) glow at full brightness. Dim them like the sky dome (stage-1 TFACTOR by `SkyDomeScale()`), matched by Remix hash.
-31.10: the mountains are 172E71FD33DEDF0E, 409C83E1829A1815, FEBCB5E0E999B867 (the other sky images are clouds). The game dims them only through fog (off in Remix). `NightBackdrops = 1` modulates them in stage 1 by the sky dome's night factor; texture hashes are cached per texture.
+31.10: the mountains are 172E71FD33DEDF0E, 409C83E1829A1815, FEBCB5E0E999B867 (the other sky images are clouds). The game dims them only through fog (off in Remix). Checked in game 31.10 (Claude, 23:00 start): mountains are dark silhouettes. `NightBackdrops = 1` modulates them in stage 1 by the sky dome's night factor; texture hashes are cached per texture.
 
 ### 10. Pause menu «Главное меню» freezes the picture — todo
 28.10: in game, Esc → «Главное меню» → «Не сохранять» leaves a frozen frame (sky and ground) and the menu never shows; only Alt+F4 helps. «Выход» → «Не сохранять» works. Probably the 3D → menu switch under KeepDevice.
