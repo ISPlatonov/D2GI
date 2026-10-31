@@ -848,6 +848,206 @@ over "RootNode"
             }
         }
 
+        # 31.10, capture 2026-10-31_10-16-53 (unnamed textures)
+        # another river water texture (64x64)
+        over "mat_BE13CF6B9AC8628F"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                asset inputs:diffuse_texture = @./textures/water_color.dds@ (
+                    colorSpace = "auto"
+                )
+                float inputs:reflection_roughness_constant = 0.03
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/water_flow.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+                int inputs:sprite_sheet_cols = 8
+                int inputs:sprite_sheet_rows = 8
+                int inputs:sprite_sheet_fps = 8
+            }
+        }
+        # clay cliffs with grass (128x128, 256x256)
+        over "mat_7D003A33FD6B6290"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.9
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/asphalt_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+            }
+        }
+        over "mat_F13E5A19BD043D42"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.9
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/asphalt_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+            }
+        }
+        over "mat_9CBB26914EA13D52"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.9
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/asphalt_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+            }
+        }
+        # grass slopes
+        over "mat_FD59EC81C4057440"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.95
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/grass_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+            }
+        }
+        over "mat_205519E1C0FED68F"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.95
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/grass_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+            }
+        }
+        over "mat_2C1310621A133817"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.95
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/grass_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+            }
+        }
+        # trees (alpha-tested)
+        over "mat_30835A5C5F7A790D"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.9
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        over "mat_4DBF450730D8D913"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.9
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        over "mat_8850D658C1BC895D"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.9
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        # truck chrome parts (grille, tank, steps)
+        over "mat_49E010DC228D430E"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.3
+                float inputs:metallic_constant = 0.6
+            }
+        }
+        # cars: red estate, white sedan, grey sports car; engine sheet
+        over "mat_28E109BD040786C8"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                asset inputs:reflectionroughness_texture = @./textures/28E109BD040786C8_rough.dds@ (
+                    colorSpace = "raw"
+                )
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        over "mat_6860C43775940F62"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                asset inputs:reflectionroughness_texture = @./textures/6860C43775940F62_rough.dds@ (
+                    colorSpace = "raw"
+                )
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        over "mat_E4C551C33056B23C"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                asset inputs:reflectionroughness_texture = @./textures/E4C551C33056B23C_rough.dds@ (
+                    colorSpace = "raw"
+                )
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        over "mat_2914FAA416D42F2E"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                asset inputs:reflectionroughness_texture = @./textures/2914FAA416D42F2E_rough.dds@ (
+                    colorSpace = "raw"
+                )
+                float inputs:metallic_constant = 0.0
+            }
+        }
+
         # Vehicle atlases (30.10): body paint, glass and trim share one 256x256 texture. Roughness masks from
         # remix-mod/tools/gen_vehicle_masks.py (remix-mod/masks/<HASH>_rough.png, converted to DDS at bundle time):
         # glossy paint 0.18, glass 0.04, dark trim 0.55. Paint is dielectric (metallic 0).
