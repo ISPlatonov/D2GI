@@ -83,6 +83,33 @@ def water_flow():
         N = n_old
 
 
+def waterfall():
+    """Falling water (dam spillway): 4x4 sprite sheet of 128x128 frames, 16 frames at 16 fps (1 s loop).
+    Streaks stretched along V fall by one period per loop. Returns (albedo sheet, normal sheet): dark water with
+    white foam streaks, and matching relief."""
+    global N
+    n_old, N = N, 128
+    try:
+        streaks = periodic_noise(51, 0.9, aniso=(0.12, 1.0), lo=3, hi=20)
+        foam = periodic_noise(52, 1.1, aniso=(0.3, 1.0), lo=4, hi=15)
+        cols, frames = 4, 16
+        col = Image.new("RGBA", (cols * N, cols * N))
+        nrm = Image.new("RGBA", (cols * N, cols * N))
+        for f in range(frames):
+            s = (f * N) // frames
+            h = np.roll(streaks, s, 0) * 0.7 + np.roll(foam, 2 * s, 0) * 0.3
+            w = np.clip((h - 0.45) * 2.5, 0, 1)          # foam amount 0..1
+            base = np.array([20, 44, 46], np.float32)
+            white = np.array([225, 235, 238], np.float32)
+            rgb = base[None, None, :] * (1 - w[..., None]) + white[None, None, :] * w[..., None]
+            a = np.full((N, N, 1), 235, np.float32)
+            col.paste(Image.fromarray(np.dstack([rgb, a]).astype(np.uint8), "RGBA"), ((f % cols) * N, (f // cols) * N))
+            nrm.paste(to_normal(h, 4.0), ((f % cols) * N, (f // cols) * N))
+        return col, nrm
+    finally:
+        N = n_old
+
+
 def water_color():
     # Real water is dark; what you see is mostly reflection. Deep green-blue, 4x4 constant (the game's turquoise
     # texture made rivers look like a pool).
@@ -103,6 +130,12 @@ def main():
             os.makedirs(prev, exist_ok=True)
             img.convert("RGB").save(os.path.join(prev, name + ".png"))
         print(name, img.size)
+    col, nrm = waterfall()
+    col.save(os.path.join(out, "waterfall_color.dds"))
+    nrm.save(os.path.join(out, "waterfall_normal.dds"))
+    if prev:
+        col.convert("RGB").save(os.path.join(prev, "waterfall_color.png"))
+    print("waterfall", col.size)
 
 
 if __name__ == "__main__":
