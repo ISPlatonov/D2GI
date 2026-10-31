@@ -31,6 +31,7 @@ bool       D2GIConfig::s_bRemixSkyDome = false;
 bool       D2GIConfig::s_bRemixSingleSun = false;
 bool       D2GIConfig::s_bRemixSunFollowsTime = false;
 bool       D2GIConfig::s_bRemixGlowLightColor = false;
+bool       D2GIConfig::s_bRemixNightBackdrops = false;
 
 uint32_t D2GIConfig::GetVideoWidth()
 {
@@ -101,12 +102,13 @@ HookOptions D2GIConfig::ReadFromFile()
 	s_bRemixSingleSun = !!GetPrivateProfileInt(TEXT("REMIX"), TEXT("SingleSun"), FALSE, configFilePath.c_str());
 	s_bRemixSunFollowsTime = !!GetPrivateProfileInt(TEXT("REMIX"), TEXT("SunFollowsTime"), FALSE, configFilePath.c_str());
 	s_bRemixGlowLightColor = !!GetPrivateProfileInt(TEXT("REMIX"), TEXT("GlowLightColor"), FALSE, configFilePath.c_str());
+	s_bRemixNightBackdrops = !!GetPrivateProfileInt(TEXT("REMIX"), TEXT("NightBackdrops"), FALSE, configFilePath.c_str());
 	s_nRemixHeadlights = (int)GetPrivateProfileInt(TEXT("REMIX"), TEXT("Headlights"), 0, configFilePath.c_str());
 	s_nRemixDrawDistance = (int)GetPrivateProfileInt(TEXT("REMIX"), TEXT("DrawDistance"), 100, configFilePath.c_str());
-	Logger::Log(TEXT("Remix options: DebugDraws=%d UntexturedColors=%d KeepDevice=%d PersistentHUD=%d ManagedTextures=%d StaticBlitTextures=%d ClearWindshield=%d SkipBackdrop=%d EmitCabRain=%d SunStrength=%d SkyDome=%d Headlights=%d DrawDistance=%d SingleSun=%d SunFollowsTime=%d GlowLightColor=%d"),
+	Logger::Log(TEXT("Remix options: DebugDraws=%d UntexturedColors=%d KeepDevice=%d PersistentHUD=%d ManagedTextures=%d StaticBlitTextures=%d ClearWindshield=%d SkipBackdrop=%d EmitCabRain=%d SunStrength=%d SkyDome=%d Headlights=%d DrawDistance=%d SingleSun=%d SunFollowsTime=%d GlowLightColor=%d NightBackdrops=%d"),
 		(int)s_bRemixDebugDraws, (int)s_bRemixUntexturedColors, (int)s_bRemixKeepDevice, (int)s_bRemixPersistentHUD,
 		(int)s_bRemixManagedTextures, (int)s_bRemixStaticBlitTextures, (int)s_bRemixClearWindshield, (int)s_bRemixSkipBackdrop,
-		(int)s_bRemixEmitCabRain, s_nRemixSunStrength, (int)s_bRemixSkyDome, s_nRemixHeadlights, s_nRemixDrawDistance, (int)s_bRemixSingleSun, (int)s_bRemixSunFollowsTime, (int)s_bRemixGlowLightColor);
+		(int)s_bRemixEmitCabRain, s_nRemixSunStrength, (int)s_bRemixSkyDome, s_nRemixHeadlights, s_nRemixDrawDistance, (int)s_bRemixSingleSun, (int)s_bRemixSunFollowsTime, (int)s_bRemixGlowLightColor, (int)s_bRemixNightBackdrops);
 
 	GetPrivateProfileStringW(L"SCREENSHOTS", L"SavePath", L".\\screenshots",
 		s_cScreenshotsPath, MAX_PATH, configFilePath.c_str());

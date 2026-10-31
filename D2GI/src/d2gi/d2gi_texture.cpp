@@ -32,6 +32,8 @@ D2GITexture::D2GITexture(D2GI* pD2GI, DWORD dwWidth, DWORD dwHeight,
 
 D2GITexture::~D2GITexture()
 {
+	if (GetD2GI() != nullptr)
+		GetD2GI()->OnTextureDestroyed(this);
 }
 
 

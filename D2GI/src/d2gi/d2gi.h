@@ -152,6 +152,7 @@ class D2GI
 	// SingleSun: game light indices currently holding a dropped directional light, and what the game enabled
 	bool m_bGameDirLightDropped[64] = {};
 	bool m_bGameLightOn[64] = {};
+	std::unordered_map<const D2GITexture*, unsigned long long> m_TexHashCache;
 	// Vehicles found in the game's heap (see UpdateVehicleList); lamp positions in vehicle coordinates
 	// (x right, y forward, z up), learned from their lg_head glow quads
 	struct TrackedVehicle { DWORD ptr; DWORD vt; FLOAT M[12]; FLOAT lamp[2][3]; int samples[2]; };
@@ -172,6 +173,9 @@ class D2GI
 public:
 	VOID RestoreTexture0(D2GITexture* pTex);
 	VOID RestoreMaterial();
+	// Content hash of a texture's top level as Remix computes it (XXH3 of the rows), cached per texture
+	unsigned long long CachedTextureHash(D2GITexture* pTex);
+	VOID OnTextureDestroyed(D2GITexture* pTex) { m_TexHashCache.erase(pTex); }
 private:
 	VOID MaybeEmitCabRain();
 	BOOL DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,

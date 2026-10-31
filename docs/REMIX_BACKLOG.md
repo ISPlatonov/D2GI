@@ -51,8 +51,9 @@ The owner wants the world drawn much farther (also needed so off-screen geometry
 **30.10:** owner: materials look unrealistic, vehicle bodies do not look real. 27 vehicle atlases (body, glass and trim in one 256x256 RGB565 texture; unnamed in the DebugDraws log) taken from a Remix capture (`rtx-remix/captures/textures/<HASH>.dds`, GLI1 = 565 with a 148-byte header). Per-atlas roughness masks by color class: paint 0.18, glass 0.04, dark trim 0.55 (`gen_vehicle_masks.py`). Truck steel parts metallic 0.7 → 0.3.
 **31.10:** highway roadside, gas station, meadow, trees, sports car (#33); asphalt normal softer (looked like crumpled foil near the truck). River water: dark glossy opaque with our own color (the game's turquoise looked like a pool) and a ripple normal map. Flowing ripples (8 s loop, owner: 4x slower than the first try). Dam spillway waterfall: own animated foam albedo + normal (1 s loop, falling along V), dam concrete.
 
-### 13. Mountain backdrops stay bright at night — todo
+### 13. Mountain backdrops stay bright at night — in review
 31.10 (owner's screenshots): at night the sky is dark but the mountain skybox images (`skyBoxTextures`, e.g. 172E71FD33DEDF0E, 409C83E1829A1815, FEBCB5E0E999B867) glow at full brightness. Dim them like the sky dome (stage-1 TFACTOR by `SkyDomeScale()`), matched by Remix hash.
+31.10: the mountains are 172E71FD33DEDF0E, 409C83E1829A1815, FEBCB5E0E999B867 (the other sky images are clouds). The game dims them only through fog (off in Remix). `NightBackdrops = 1` modulates them in stage 1 by the sky dome's night factor; texture hashes are cached per texture.
 
 ### 10. Pause menu «Главное меню» freezes the picture — todo
 28.10: in game, Esc → «Главное меню» → «Не сохранять» leaves a frozen frame (sky and ground) and the menu never shows; only Alt+F4 helps. «Выход» → «Не сохранять» works. Probably the 3D → menu switch under KeepDevice.

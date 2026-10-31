@@ -1526,6 +1526,55 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 		~GlowMaterialRestore() { if (b) p->RestoreMaterial(); }
 	} glowMaterialRestore = { this, bGlowMaterial };
 
+	// NightBackdrops: the mountain skybox images (rtx.skyBoxTextures) are lit by nothing and the game darkens them
+	// only with fog, which Remix does not use, so at night they glowed as by day. Modulate them in stage 1 by the
+	// same night factor as the sky dome. Matched by Remix hash of the 256x256 mountain textures.
+	struct StageRestore {
+		D3D9::IDirect3DDevice9* d; bool b; DWORD tf, op, a1, a2, aop, aa1;
+		~StageRestore()
+		{
+			if (!b)
+				return;
+			d->SetRenderState(D3D9::D3DRS_TEXTUREFACTOR, tf);
+			d->SetTextureStageState(1, D3D9::D3DTSS_COLORARG1, a1);
+			d->SetTextureStageState(1, D3D9::D3DTSS_COLORARG2, a2);
+			d->SetTextureStageState(1, D3D9::D3DTSS_ALPHAARG1, aa1);
+			d->SetTextureStageState(1, D3D9::D3DTSS_COLOROP, op);
+			d->SetTextureStageState(1, D3D9::D3DTSS_ALPHAOP, aop);
+		}
+	} backdropRestore = { m_pDev, false };
+	if (D2GIConfig::RemixNightBackdropsEnabled() && !m_bInUntexturedFix && m_lpCurrentTextures[0] != nullptr &&
+		m_lpCurrentTextures[0]->GetWidth() == 256 && m_lpCurrentTextures[0]->GetHeight() == 256 &&
+		m_dbgStageState[1][D3D7::D3DTSS_COLOROP] == D3D7::D3DTOP_DISABLE)
+	{
+		static const unsigned long long kMountains[] = { 0x172E71FD33DEDF0Eull, 0x409C83E1829A1815ull, 0xFEBCB5E0E999B867ull };
+		const unsigned long long h = CachedTextureHash(m_lpCurrentTextures[0]);
+		if (std::find(std::begin(kMountains), std::end(kMountains), h) != std::end(kMountains))
+		{
+			StageRestore& r = backdropRestore;
+			r.b = true;
+			m_pDev->GetRenderState(D3D9::D3DRS_TEXTUREFACTOR, &r.tf);
+			m_pDev->GetTextureStageState(1, D3D9::D3DTSS_COLOROP, &r.op);
+			m_pDev->GetTextureStageState(1, D3D9::D3DTSS_COLORARG1, &r.a1);
+			m_pDev->GetTextureStageState(1, D3D9::D3DTSS_COLORARG2, &r.a2);
+			m_pDev->GetTextureStageState(1, D3D9::D3DTSS_ALPHAOP, &r.aop);
+			m_pDev->GetTextureStageState(1, D3D9::D3DTSS_ALPHAARG1, &r.aa1);
+			const DWORD k = SkyDomeScale();
+			m_pDev->SetRenderState(D3D9::D3DRS_TEXTUREFACTOR, 0xFF000000 | (k << 16) | (k << 8) | k);
+			m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLOROP, D3D9::D3DTOP_MODULATE);
+			m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLORARG1, D3DTA_CURRENT);
+			m_pDev->SetTextureStageState(1, D3D9::D3DTSS_COLORARG2, D3DTA_TFACTOR);
+			m_pDev->SetTextureStageState(1, D3D9::D3DTSS_ALPHAOP, D3D9::D3DTOP_SELECTARG1);
+			m_pDev->SetTextureStageState(1, D3D9::D3DTSS_ALPHAARG1, D3DTA_CURRENT);
+			static bool s_bLogged = false;
+			if (!s_bLogged)
+			{
+				s_bLogged = true;
+				Logger::Log(TEXT("Remix: NightBackdrops dims mountain backdrop %016llX by %u/255"), h, (unsigned)k);
+			}
+		}
+	}
+
 	// Backdrop: the game first draws an untextured sky dome and a flat ground plane around the camera with
 	// z-write off. Under Remix they cover the world (sky) or lie over roads (khaki plane), and their
 	// UntexturedColors hash changes with weather and time of day. No other untextured 3D draw has z-write off.
@@ -3326,4 +3375,32 @@ VOID D2GI::ScanForVehicles(DWORD dwPlayer)
 	}
 	fprintf(f, "end refs3 %d\n", nRefs3);
 	fclose(f);
+}
+
+
+unsigned long long D2GI::CachedTextureHash(D2GITexture* pTex)
+{
+	auto it = m_TexHashCache.find(pTex);
+	if (it != m_TexHashCache.end())
+		return it->second;
+	unsigned long long h = 0;
+	D3D9::IDirect3DTexture9* pD3DTex = pTex->GetD3D9Texture();
+	D3D9::D3DSURFACE_DESC desc;
+	if (pD3DTex != nullptr && SUCCEEDED(pD3DTex->GetLevelDesc(0, &desc)))
+	{
+		const UINT bpp = BytesPerPixel(desc.Format);
+		D3D9::D3DLOCKED_RECT lr;
+		if (bpp != 0 && SUCCEEDED(pD3DTex->LockRect(0, &lr, nullptr, D3DLOCK_READONLY)))
+		{
+			XXH3_state_t* st = XXH3_createState();
+			XXH3_64bits_reset(st);
+			for (UINT y = 0; y < desc.Height; y++)
+				XXH3_64bits_update(st, static_cast<const BYTE*>(lr.pBits) + (size_t)y * lr.Pitch, (size_t)desc.Width * bpp);
+			h = XXH3_64bits_digest(st);
+			XXH3_freeState(st);
+			pD3DTex->UnlockRect(0);
+		}
+	}
+	m_TexHashCache[pTex] = h;
+	return h;
 }
