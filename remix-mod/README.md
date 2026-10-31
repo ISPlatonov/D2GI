@@ -30,6 +30,10 @@ into `HT2-RTX.zip`; CI publishes it as the release `latest` (master) or `pr-N` (
   capture (only the masks are kept, not game pixels), and converted to DDS by `make_bundle.py`. To add a vehicle:
   capture, decode its `captures/textures/<HASH>.dds` to PNG, run the tool, add an `over "mat_<HASH>"` block.
 
+- Wet roads (31.10): `WetRoads` in D2GI draws known road textures with a copy where every 565 channel is
+  `*3/4` (integer). The wet hash = XXH3-64 of the darkened top level, computed offline from the captured texture
+  (`captures/textures/<HASH>.dds`, GLI1 = 565 data from byte 148); D2GI logs `wet copy of X is Y` to check it.
+
 ## Texture names in rtx.conf
 
 From `d2gi_remix.log` (`DebugDraws=1`, which logs each texture's Remix hash). "-" = not seen in the logged runs.
