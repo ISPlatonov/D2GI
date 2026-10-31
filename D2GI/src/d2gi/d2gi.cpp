@@ -1589,7 +1589,6 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 			static const unsigned long long kRoads[] = {
 				0x9A2C159304E5A4D4ull, // road2.txr: main road with markings
 				0x2D89EABEB66BE74Aull, // road.txr: plain asphalt
-				0x5FBCFC958E1DDF00ull, // store_b0.txr: cobblestones
 			};
 			const unsigned long long h = CachedTextureHash(pTex);
 			if (std::find(std::begin(kRoads), std::end(kRoads), h) != std::end(kRoads))

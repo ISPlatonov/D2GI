@@ -118,8 +118,9 @@ def wet_road():
     n_old, N = N, 128
     try:
         rng = np.random.default_rng(61)
-        mask = periodic_noise(62, 2.0, lo=1, hi=6)
-        puddle = np.clip((mask - 0.58) * 12.0, 0, 1)              # soft-edged blobs, ~25% of the area
+        mask = periodic_noise(62, 1.6, lo=1, hi=10)
+        # small soft-edged puddles, ~12% of the area (31.10: 25% made a regular pattern, the road texture tiles often)
+        puddle = np.clip((mask - 0.68) * 14.0, 0, 1)
         grain = periodic_noise(63, 0.4, lo=20, hi=60)
         rough = 0.22 * (1 - puddle) + 0.03 * puddle
         frames, cols = 16, 4
@@ -139,7 +140,7 @@ def wet_road():
                 dy = (yy - y + N / 2) % N - N / 2
                 dist = np.sqrt(dx * dx + dy * dy)
                 ring = np.exp(-((dist - radius) / 0.9) ** 2) * (1 - age / 8.0)
-                h = h + ring * 0.8 * puddle
+                h = h + ring * 0.5 * puddle
             ns.paste(to_normal(h, 3.0), ((f % cols) * N, (f // cols) * N))
             rs.paste(rimg, ((f % cols) * N, (f // cols) * N))
         return rs, ns
