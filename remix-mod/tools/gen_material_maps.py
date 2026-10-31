@@ -111,36 +111,33 @@ def waterfall():
 
 
 def wet_road():
-    """Wet road: 4x4 sprite sheets of 128x128 frames, 16 frames at 16 fps (1 s loop), tiled in the road texture's UV.
-    Roughness: puddles 0.03, wet asphalt 0.22. Normal: fine asphalt grain, and in puddles flat water with expanding
-    raindrop rings (each drop starts at a fixed frame of the loop, so the loop is seamless)."""
+    """Wet road: 4x4 sprite sheets of 128x128 frames, 16 frames at 16 fps (1 s loop), in the road texture's UV.
+    Uniformly wet asphalt (roughness 0.14) with its grain and many small, short-lived raindrop rings spread at
+    random, so nothing reads as a pattern. 31.10: puddles from a mask repeated with every road tile and the owner
+    found the identical puddles monotonous; puddles would need world-space placement, which this cannot do."""
     global N
     n_old, N = N, 128
     try:
-        rng = np.random.default_rng(61)
-        mask = periodic_noise(62, 1.6, lo=1, hi=10)
-        # small soft-edged puddles, ~12% of the area (31.10: 25% made a regular pattern, the road texture tiles often)
-        puddle = np.clip((mask - 0.68) * 14.0, 0, 1)
+        rng = np.random.default_rng(71)
         grain = periodic_noise(63, 0.4, lo=20, hi=60)
-        rough = 0.22 * (1 - puddle) + 0.03 * puddle
+        rough = np.full((N, N), 0.14, np.float32)
         frames, cols = 16, 4
-        drops = [(rng.uniform(0, N), rng.uniform(0, N), int(rng.integers(0, frames))) for _ in range(40)]
+        drops = [(rng.uniform(0, N), rng.uniform(0, N), int(rng.integers(0, frames))) for _ in range(160)]
         yy, xx = np.mgrid[0:N, 0:N].astype(np.float32)
         rs = Image.new("RGBA", (cols * N, cols * N))
         ns = Image.new("RGBA", (cols * N, cols * N))
         rimg = Image.fromarray((np.dstack([rough] * 3 + [np.ones_like(rough)]) * 255 + 0.5).astype(np.uint8), "RGBA")
         for f in range(frames):
-            h = grain * 0.6 * (1 - puddle)
+            h = grain * 0.5
             for (x, y, f0) in drops:
                 age = (f - f0) % frames
-                if age > 7:
+                if age > 4:
                     continue
-                radius = 1.5 + age * 1.6
-                dx = (xx - x + N / 2) % N - N / 2                    # wrap so rings tile
+                radius = 0.8 + age * 0.9
+                dx = (xx - x + N / 2) % N - N / 2
                 dy = (yy - y + N / 2) % N - N / 2
                 dist = np.sqrt(dx * dx + dy * dy)
-                ring = np.exp(-((dist - radius) / 0.9) ** 2) * (1 - age / 8.0)
-                h = h + ring * 0.5 * puddle
+                h = h + np.exp(-((dist - radius) / 0.6) ** 2) * (1 - age / 5.0) * 0.35
             ns.paste(to_normal(h, 3.0), ((f % cols) * N, (f // cols) * N))
             rs.paste(rimg, ((f % cols) * N, (f // cols) * N))
         return rs, ns
