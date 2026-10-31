@@ -1076,6 +1076,12 @@ bool D2GI::IsDumpFrame() const
 }
 
 
+VOID D2GI::RestoreMaterial()
+{
+	m_pDev->SetMaterial((D3D9::D3DMATERIAL9*)&m_CurrentMaterial);
+}
+
+
 VOID D2GI::OnMaterialSet(D3D7::LPD3DMATERIAL7 pMaterial)
 {
 	if (pMaterial != nullptr)
@@ -1496,6 +1502,29 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 		D2GI* p; D2GITexture* t;
 		~GlowRestore() { if (t != nullptr) p->RestoreTexture0(t); }
 	} glowRestore = { this, pGlowSaved };
+
+	// GlowLightColor: Remix colors the effect light of an lg_head glow (rtx.lightConverter) by the draw's material
+	// diffuse, which the game leaves from whatever it drew before (a purple car lit the road purple). Draw the
+	// glows with a fixed warm white material, then put the game's material back.
+	bool bGlowMaterial = false;
+	if (D2GIConfig::RemixGlowLightColorEnabled() && TextureNameIs(pGlowSaved != nullptr ? pGlowSaved : m_lpCurrentTextures[0], "lg_head.txr"))
+	{
+		D3D9::D3DMATERIAL9 mat = {};
+		mat.Diffuse = { 1.0f, 0.93f, 0.8f, 1.0f };
+		mat.Ambient = mat.Diffuse;
+		m_pDev->SetMaterial(&mat);
+		bGlowMaterial = true;
+		static bool s_bLogged = false;
+		if (!s_bLogged)
+		{
+			s_bLogged = true;
+			Logger::Log(TEXT("Remix: GlowLightColor draws lg_head glows with a fixed warm white material"));
+		}
+	}
+	struct GlowMaterialRestore {
+		D2GI* p; bool b;
+		~GlowMaterialRestore() { if (b) p->RestoreMaterial(); }
+	} glowMaterialRestore = { this, bGlowMaterial };
 
 	// Backdrop: the game first draws an untextured sky dome and a flat ground plane around the camera with
 	// z-write off. Under Remix they cover the world (sky) or lie over roads (khaki plane), and their
