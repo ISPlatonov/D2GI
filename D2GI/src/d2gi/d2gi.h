@@ -155,7 +155,7 @@ class D2GI
 	std::unordered_map<const D2GITexture*, unsigned long long> m_TexHashCache;
 	// Vehicles found in the game's heap (see UpdateVehicleList); lamp positions in vehicle coordinates
 	// (x right, y forward, z up), learned from their lg_head glow quads
-	struct TrackedVehicle { DWORD ptr; DWORD vt; FLOAT M[12]; FLOAT lamp[2][3]; int samples[2]; };
+	struct TrackedVehicle { DWORD ptr; DWORD vt; FLOAT M[12]; FLOAT lamp[2][3]; int samples[2]; int misses; };
 	std::vector<TrackedVehicle> m_Vehicles;
 	DWORD m_dwVehicleScanAddr = 0x10000;
 	FLOAT m_ClassLamp[3][2][3] = {};

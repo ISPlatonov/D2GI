@@ -2869,6 +2869,8 @@ VOID D2GI::SetRemixHeadlights(const FLOAT* v)
 	for (size_t k = 0; k < m_Vehicles.size(); k++)
 	{
 		const TrackedVehicle& tv = m_Vehicles[k];
+		if (tv.misses > 10)
+			continue;
 		int beam = 0;
 		if (tv.ptr == dwPlayer)
 			beam = iSwitch < 0 ? (NightFactor() < 0.35f ? 1 : 0) : iSwitch;
@@ -2886,7 +2888,8 @@ VOID D2GI::SetRemixHeadlights(const FLOAT* v)
 		{
 			const float dx = tv.M[9] - P[9], dy = tv.M[10] - P[10], dz = tv.M[11] - P[11];
 			d2 = dx * dx + dy * dy + dz * dz;
-			if (d2 > 600.0f * 600.0f)
+			// 1000: with DrawDistance x3, cars farther than the old 600 are visible and lost their light
+			if (d2 > 1000.0f * 1000.0f)
 				continue;
 		}
 		s_lit.push_back({ k, d2, beam });
@@ -3019,7 +3022,22 @@ VOID D2GI::UpdateVehicleList()
 	{
 		TrackedVehicle& tv = m_Vehicles[k];
 		DWORD vt = 0;
-		if (!ReadGameDword(tv.ptr, &vt) || vt != tv.vt || !ReadVehicleMatrix(tv.ptr, tv.M))
+		if (!ReadGameDword(tv.ptr, &vt) || vt != tv.vt)
+		{
+			m_Vehicles[k] = m_Vehicles.back();
+			m_Vehicles.pop_back();
+			continue;
+		}
+		// A transform that fails the sanity check for a frame or two (e.g. mid-update) used to drop the vehicle,
+		// and it came back only when the memory scan reached it again, seconds later: its lights went out for that
+		// time (owner, 29.10). Keep it with its last good transform; give up after ~2 s of bad reads.
+		float M[12];
+		if (ReadVehicleMatrix(tv.ptr, M))
+		{
+			CopyMemory(tv.M, M, sizeof(M));
+			tv.misses = 0;
+		}
+		else if (++tv.misses > 120)
 		{
 			m_Vehicles[k] = m_Vehicles.back();
 			m_Vehicles.pop_back();
@@ -3170,6 +3188,14 @@ bool D2GI::LearnVehicleLamp(DWORD dwFVF, BOOL bStrided, VOID* pVertexData, DWORD
 	const int side = bestL[0] < 0.0f ? 0 : 1;
 	int& n = best->samples[side];
 	float* lamp = best->lamp[side];
+	// Once a lamp is known, ignore glows far from it: a glow of an untracked car just ahead also lands in the box
+	// and used to drag our lamp (and our headlight) forward, away from the truck (owner, 29.10).
+	if (n >= 20)
+	{
+		const float e[3] = { bestL[0] - lamp[0], bestL[1] - lamp[1], bestL[2] - lamp[2] };
+		if (e[0] * e[0] + e[1] * e[1] + e[2] * e[2] > 0.5f * 0.5f)
+			return true;
+	}
 	if (n == 0)
 		CopyMemory(lamp, bestL, sizeof(bestL));
 	else if (n < 1000)

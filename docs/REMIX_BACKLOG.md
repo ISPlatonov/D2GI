@@ -43,8 +43,9 @@ The owner wants the world drawn much farther (also needed so off-screen geometry
 **#29:** `DrawDistance = 300` multiplies the weather fog far/near (and so the far plane) in memory. Earlier switch-distance patch removed.
 **Checked 29.10 (Claude, start base, rain, 10:00):** with 100 the view from the cab ends in grey right behind the first trees; with 300 the mountains and the far forest are drawn. Owner check pending: clear day, night, highway, FPS.
 
-### 11. Vehicle headlights drop out — todo
+### 11. Vehicle headlights drop out — in review
 29.10, owner: our headlight light sometimes "leaks away" (moves off / disappears for a moment), and other vehicles' light sometimes suddenly drops off. Suspects: the per-frame vehicle scan (`UpdateVehicleList`, 4 MB window) losing a vehicle; the 16-nearest / 600-unit cut; lamp positions learned from glow quads (`LearnVehicleLamp`) being re-learned wrong; the game's light flag toggling. Reproduce with DebugDraws and log when a tracked vehicle is dropped or its lamp position jumps.
+31.10 (#39, from reading the code): a single bad transform read dropped a vehicle until the 4 MB/frame scan found it again (seconds without light) - now kept up to ~2 s with its last transform. After 20 samples a lamp ignores glows farther than 0.5 from it (an untracked car's glow ahead dragged our lamp forward). Light radius 600 -> 1000 (DrawDistance x3). Needs the owner's check in traffic.
 
 ### 12. Surface materials (grass, asphalt, metal, glass) — in progress
 29.10, owner: make surfaces look like grass or metal. First pass: roughness/metallic per texture (names → hashes from the DebugDraws log) and procedural tileable normal maps for grass and asphalt (`remix-mod/tools/gen_material_maps.py`, generated at bundle time). Truck bodies and other regions' textures are not in the log yet (unnamed or never seen).
