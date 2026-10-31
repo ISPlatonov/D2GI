@@ -1052,24 +1052,16 @@ over "RootNode"
         # whose content hash is listed here (computed offline from the captured texture; D2GI logs it too).
         # Uniformly wet, slightly glossy asphalt with small animated raindrop rings (no puddles: the owner found the
         # repeated puddles monotonous).
-        # road2.txr 9A2C159304E5A4D4 -> wet
+        # road2.txr 9A2C159304E5A4D4 -> wet. Its UVs are stretched along the road, so raindrop rings became large dark
+        # blotches (owner's screenshots, 31.10): plain wet sheen only, no normal map.
         over "mat_200A8142FA2B4839"
         {
             over "Shader"
             {
                 uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
                 uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
-                asset inputs:reflectionroughness_texture = @./textures/wet_road_rough.dds@ (
-                    colorSpace = "raw"
-                )
+                float inputs:reflection_roughness_constant = 0.18
                 float inputs:metallic_constant = 0.0
-                asset inputs:normalmap_texture = @./textures/wet_road_normal.dds@ (
-                    colorSpace = "raw"
-                )
-                int inputs:encoding = 2
-                int inputs:sprite_sheet_cols = 4
-                int inputs:sprite_sheet_rows = 4
-                int inputs:sprite_sheet_fps = 16
             }
         }
         # road.txr 2D89EABEB66BE74A -> wet
