@@ -47,10 +47,11 @@ def grass():
 
 def asphalt():
     # Grain and small stones, with gentle large-scale waviness.
-    grain = periodic_noise(21, 0.3, lo=60, hi=240)
+    grain = periodic_noise(21, 0.3, lo=30, hi=120)
     stones = np.clip(periodic_noise(22, 0.8, lo=20, hi=120) - 0.55, 0, 1) * 2.0
     wave = periodic_noise(23, 2.0, lo=1, hi=8)
-    return to_normal(grain * 0.5 + stones * 0.4 + wave * 0.1, 10.0)
+    # Softer than the first version (31.10): near the truck the road looked like crumpled foil
+    return to_normal(grain * 0.5 + stones * 0.4 + wave * 0.1, 4.0)
 
 
 def main():

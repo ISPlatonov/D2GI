@@ -19,6 +19,7 @@ CONSTANT = {
     "0BCA2E90F90E4B71": 0.75,  # curtain-side trailer
     "8211DABB7F356637": 0.5,   # engine and underside
     "9A0FF7C84F68B3F2": 0.5,   # engine and underside
+    "15DD14BA147F9B4C": 0.5,   # engine and underside
 }
 
 

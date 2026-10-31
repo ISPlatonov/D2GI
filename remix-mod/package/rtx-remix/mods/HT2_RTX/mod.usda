@@ -534,6 +534,171 @@ over "RootNode"
             }
         }
 
+        # Highway near the gas station (31.10, capture 2026-10-31_09-11-59; unnamed textures)
+        # meadow grass (256x256)
+        over "mat_6970DA963258F1E7"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.95
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/grass_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+            }
+        }
+        # tree groups and forest walls (256x256 and 128x128, alpha-tested)
+        over "mat_3FCA3F09589F23C8"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.9
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        over "mat_7880D4DA2530977E"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.9
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        over "mat_87CF877A537696C9"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.9
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        over "mat_A67D29E71AD018F1"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.9
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        over "mat_01A57C81D078D7D3"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.9
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        over "mat_5C6CD4B216961E53"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.9
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        # gas station: fuel pump, corrugated metal wall, yellow tiles, window wall, fuel sign
+        over "mat_28F4C3BD39C3505D"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.4
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        over "mat_3E42D8028783BBDC"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.45
+                float inputs:metallic_constant = 0.6
+            }
+        }
+        over "mat_54E817A38041F753"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.6
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        over "mat_ED433AF7F736BB60"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.3
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        over "mat_AC8616AA5D106195"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.4
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        # truck chrome parts (grille, tank, steps; 128x128)
+        over "mat_313AFEBB8BE3310F"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.3
+                float inputs:metallic_constant = 0.6
+            }
+        }
+        # black sports car (vehicle atlas) and its engine sheet
+        over "mat_C9DB4EFBA5E17204"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                asset inputs:reflectionroughness_texture = @./textures/C9DB4EFBA5E17204_rough.dds@ (
+                    colorSpace = "raw"
+                )
+                float inputs:metallic_constant = 0.0
+            }
+        }
+        over "mat_15DD14BA147F9B4C"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                asset inputs:reflectionroughness_texture = @./textures/15DD14BA147F9B4C_rough.dds@ (
+                    colorSpace = "raw"
+                )
+                float inputs:metallic_constant = 0.0
+            }
+        }
+
         # Vehicle atlases (30.10): body paint, glass and trim share one 256x256 texture. Roughness masks from
         # remix-mod/tools/gen_vehicle_masks.py (remix-mod/masks/<HASH>_rough.png, converted to DDS at bundle time):
         # glossy paint 0.18, glass 0.04, dark trim 0.55. Paint is dielectric (metallic 0).
