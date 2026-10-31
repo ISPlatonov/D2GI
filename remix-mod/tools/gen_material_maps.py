@@ -62,22 +62,22 @@ def water():
 
 
 def water_flow():
-    """Animated ripples: a 4x4 sprite sheet of 256x256 frames (Remix plays it with sprite_sheet_*).
-    Two periodic layers roll along V (one 1 period per loop, one 2 periods and a little sideways), so the
-    loop is seamless and the surface looks like it flows."""
+    """Animated ripples: an 8x8 sprite sheet of 128x128 frames (Remix plays it with sprite_sheet_*, 8 fps).
+    Periodic layers roll by whole periods per 64-frame loop, so the 8 s loop is seamless; 2 px per frame keeps
+    the motion smooth. 31.10: the first version (16 frames, 2 s) flowed about 4x too fast for the owner."""
     global N
-    n_old, N = N, 256
+    n_old, N = N, 128
     try:
-        a = periodic_noise(41, 1.2, aniso=(0.5, 1.0), lo=4, hi=30)
-        b = periodic_noise(42, 1.0, aniso=(0.7, 1.0), lo=8, hi=50)
-        swell = periodic_noise(43, 2.2, lo=1, hi=4)
-        frames = 16
-        sheet = Image.new("RGBA", (4 * N, 4 * N))
+        a = periodic_noise(41, 1.2, aniso=(0.5, 1.0), lo=2, hi=15)
+        b = periodic_noise(42, 1.0, aniso=(0.7, 1.0), lo=4, hi=25)
+        swell = periodic_noise(43, 2.2, lo=1, hi=2)
+        frames, cols = 64, 8
+        sheet = Image.new("RGBA", (cols * N, cols * N))
         for f in range(frames):
-            sa = (f * N) // frames
-            sb = (2 * f * N) // frames
-            h = np.roll(a, sa, 0) * 0.55 + np.roll(np.roll(b, sb, 0), sa // 4, 1) * 0.3 + np.roll(swell, sa, 0) * 0.15
-            sheet.paste(to_normal(h, 5.0), ((f % 4) * N, (f // 4) * N))
+            s = (f * N) // frames                     # one period along V per loop
+            h = (np.roll(a, s, 0) * 0.55 + np.roll(np.roll(b, s, 0), -s, 1) * 0.3
+                 + np.roll(swell, s, 0) * 0.15)
+            sheet.paste(to_normal(h, 2.5), ((f % cols) * N, (f // cols) * N))
         return sheet
     finally:
         N = n_old
