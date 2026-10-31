@@ -171,6 +171,7 @@ class D2GI
 	D3D9::IDirect3DTexture9* GetPlayerGlowTexture();
 public:
 	VOID RestoreTexture0(D2GITexture* pTex);
+	VOID RestoreMaterial();
 private:
 	VOID MaybeEmitCabRain();
 	BOOL DrawUntexturedWithColor(D3D7::D3DPRIMITIVETYPE, DWORD dwFVF, BOOL bStrided, VOID* pVertexData,

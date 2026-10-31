@@ -63,3 +63,10 @@ Owner: shadows must turn during the day. The game clock is a double at `[*0x6F33
 same value the game uses for automatic night lights (`0x550562`). `SunFollowsTime = 1` moves our sun: rises in +X at
 5:00, 60 degrees over -Y at 13:30, sets in -X at 22:00; at night it stays 8 degrees high (its color is dark then).
 Which world axis is north is not known; the path may need turning to match the sky's sun sprite.
+
+## Effect light color (31.10)
+
+Remix colors an effect light (texture in `rtx.lightConverter`, here `lg_head.txr`) by the draw's legacy material
+diffuse, times `rtx.effectLightColor` (`rtx_scene_manager.cpp`, `createEffectLight`). The game does not set a
+material for glow sprites, so they inherit the previous draw's: the owner saw purple light on a trailer at night.
+`GlowLightColor = 1` sets a fixed warm white material for lg_head draws.

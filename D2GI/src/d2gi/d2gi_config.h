@@ -50,6 +50,7 @@ class D2GIConfig
 	static bool       s_bRemixSkyDome;
 	static bool       s_bRemixSingleSun;
 	static bool       s_bRemixSunFollowsTime;
+	static bool       s_bRemixGlowLightColor;
 public:
 	static HookOptions ReadFromFile();
 
@@ -77,6 +78,7 @@ public:
 	static bool RemixSkyDomeEnabled() { return s_bRemixSkyDome; }
 	static bool RemixSingleSunEnabled() { return s_bRemixSingleSun; }
 	static bool RemixSunFollowsTimeEnabled() { return s_bRemixSunFollowsTime; }
+	static bool RemixGlowLightColorEnabled() { return s_bRemixGlowLightColor; }
 
 	static std::basic_string<TCHAR> GetConfigFilePath();
 };
