@@ -782,6 +782,72 @@ over "RootNode"
             }
         }
 
+        # Dam spillway waterfall (31.10, capture 2026-10-31_10-01-40; 128x128 turquoise texture with alpha).
+        # Own animated albedo (dark water with white foam streaks) and normal, 16 frames at 16 fps, falling along V.
+        over "mat_F4F9866C3DEFBDFD"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                asset inputs:diffuse_texture = @./textures/waterfall_color.dds@ (
+                    colorSpace = "auto"
+                )
+                float inputs:reflection_roughness_constant = 0.15
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/waterfall_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+                int inputs:sprite_sheet_cols = 4
+                int inputs:sprite_sheet_rows = 4
+                int inputs:sprite_sheet_fps = 16
+            }
+        }
+        # dam concrete (walls 128x128, grating 128x128)
+        over "mat_1B8D9F1369D15391"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.85
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/asphalt_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+            }
+        }
+        over "mat_884A200DB23D6A5B"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.85
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/asphalt_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+            }
+        }
+        over "mat_18160CA970E27567"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.85
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/asphalt_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+            }
+        }
+
         # Vehicle atlases (30.10): body paint, glass and trim share one 256x256 texture. Roughness masks from
         # remix-mod/tools/gen_vehicle_masks.py (remix-mod/masks/<HASH>_rough.png, converted to DDS at bundle time):
         # glossy paint 0.18, glass 0.04, dark trim 0.55. Paint is dielectric (metallic 0).
