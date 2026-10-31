@@ -54,11 +54,27 @@ def asphalt():
     return to_normal(grain * 0.5 + stones * 0.4 + wave * 0.1, 4.0)
 
 
+def water():
+    # Ripples: directional small waves (stretched across the flow) over a few long swells.
+    ripples = periodic_noise(31, 1.2, aniso=(0.5, 1.0), lo=8, hi=60)
+    swell = periodic_noise(32, 2.2, lo=1, hi=6)
+    return to_normal(ripples * 0.8 + swell * 0.2, 6.0)
+
+
+def water_color():
+    # Real water is dark; what you see is mostly reflection. Deep green-blue, 4x4 constant (the game's turquoise
+    # texture made rivers look like a pool).
+    a = np.zeros((4, 4, 4), np.uint8)
+    a[..., 0], a[..., 1], a[..., 2], a[..., 3] = 14, 34, 36, 255
+    return Image.fromarray(a, "RGBA")
+
+
 def main():
     out = sys.argv[1]
     prev = sys.argv[2] if len(sys.argv) > 2 else None
     os.makedirs(out, exist_ok=True)
-    for name, fn in (("grass_normal", grass), ("asphalt_normal", asphalt)):
+    for name, fn in (("grass_normal", grass), ("asphalt_normal", asphalt), ("water_normal", water),
+                     ("water_color", water_color)):
         img = fn()
         img.save(os.path.join(out, name + ".dds"))
         if prev:

@@ -699,6 +699,82 @@ over "RootNode"
             }
         }
 
+        # River water (31.10, capture 2026-10-31_09-21-40; two 128x128 turquoise textures, one with alpha 229).
+        # Opaque, dark and glossy with a ripple normal map: the look comes from reflecting sky and banks.
+        over "mat_744903AE826F5756"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                asset inputs:diffuse_texture = @./textures/water_color.dds@ (
+                    colorSpace = "auto"
+                )
+                float inputs:reflection_roughness_constant = 0.03
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/water_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+            }
+        }
+        over "mat_EA5EED7C9119926C"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                asset inputs:diffuse_texture = @./textures/water_color.dds@ (
+                    colorSpace = "auto"
+                )
+                float inputs:reflection_roughness_constant = 0.03
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/water_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+            }
+        }
+        # river banks (stone and gravel slopes, 128x128) and bushes (64x64, alpha-tested)
+        over "mat_43C4CCA596CE409A"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.85
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/asphalt_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+            }
+        }
+        over "mat_F693113D080A727F"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.85
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/asphalt_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+            }
+        }
+        over "mat_97EE85E716B07BAC"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                float inputs:reflection_roughness_constant = 0.9
+                float inputs:metallic_constant = 0.0
+            }
+        }
+
         # Vehicle atlases (30.10): body paint, glass and trim share one 256x256 texture. Roughness masks from
         # remix-mod/tools/gen_vehicle_masks.py (remix-mod/masks/<HASH>_rough.png, converted to DDS at bundle time):
         # glossy paint 0.18, glass 0.04, dark trim 0.55. Paint is dielectric (metallic 0).
