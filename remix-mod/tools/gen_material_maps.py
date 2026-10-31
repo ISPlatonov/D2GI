@@ -110,6 +110,43 @@ def waterfall():
         N = n_old
 
 
+def wet_road():
+    """Wet road: 4x4 sprite sheets of 128x128 frames, 16 frames at 16 fps (1 s loop), tiled in the road texture's UV.
+    Roughness: puddles 0.03, wet asphalt 0.22. Normal: fine asphalt grain, and in puddles flat water with expanding
+    raindrop rings (each drop starts at a fixed frame of the loop, so the loop is seamless)."""
+    global N
+    n_old, N = N, 128
+    try:
+        rng = np.random.default_rng(61)
+        mask = periodic_noise(62, 2.0, lo=1, hi=6)
+        puddle = np.clip((mask - 0.58) * 12.0, 0, 1)              # soft-edged blobs, ~25% of the area
+        grain = periodic_noise(63, 0.4, lo=20, hi=60)
+        rough = 0.22 * (1 - puddle) + 0.03 * puddle
+        frames, cols = 16, 4
+        drops = [(rng.uniform(0, N), rng.uniform(0, N), int(rng.integers(0, frames))) for _ in range(40)]
+        yy, xx = np.mgrid[0:N, 0:N].astype(np.float32)
+        rs = Image.new("RGBA", (cols * N, cols * N))
+        ns = Image.new("RGBA", (cols * N, cols * N))
+        rimg = Image.fromarray((np.dstack([rough] * 3 + [np.ones_like(rough)]) * 255 + 0.5).astype(np.uint8), "RGBA")
+        for f in range(frames):
+            h = grain * 0.6 * (1 - puddle)
+            for (x, y, f0) in drops:
+                age = (f - f0) % frames
+                if age > 7:
+                    continue
+                radius = 1.5 + age * 1.6
+                dx = (xx - x + N / 2) % N - N / 2                    # wrap so rings tile
+                dy = (yy - y + N / 2) % N - N / 2
+                dist = np.sqrt(dx * dx + dy * dy)
+                ring = np.exp(-((dist - radius) / 0.9) ** 2) * (1 - age / 8.0)
+                h = h + ring * 0.8 * puddle
+            ns.paste(to_normal(h, 3.0), ((f % cols) * N, (f // cols) * N))
+            rs.paste(rimg, ((f % cols) * N, (f // cols) * N))
+        return rs, ns
+    finally:
+        N = n_old
+
+
 def water_color():
     # Real water is dark; what you see is mostly reflection. Deep green-blue, 4x4 constant (the game's turquoise
     # texture made rivers look like a pool).
@@ -130,6 +167,12 @@ def main():
             os.makedirs(prev, exist_ok=True)
             img.convert("RGB").save(os.path.join(prev, name + ".png"))
         print(name, img.size)
+    rs, ns = wet_road()
+    rs.save(os.path.join(out, "wet_road_rough.dds"))
+    ns.save(os.path.join(out, "wet_road_normal.dds"))
+    if prev:
+        ns.convert("RGB").save(os.path.join(prev, "wet_road_normal.png"))
+        rs.convert("RGB").save(os.path.join(prev, "wet_road_rough.png"))
     col, nrm = waterfall()
     col.save(os.path.join(out, "waterfall_color.dds"))
     nrm.save(os.path.join(out, "waterfall_normal.dds"))

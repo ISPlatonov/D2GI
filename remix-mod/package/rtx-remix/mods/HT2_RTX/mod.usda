@@ -1048,6 +1048,70 @@ over "RootNode"
             }
         }
 
+        # Wet roads (31.10, D2GI WetRoads): while it rains D2GI draws these roads with a copy darkened to 3/4,
+        # whose content hash is listed here (computed offline from the captured texture; D2GI logs it too).
+        # Glossy wet asphalt with puddles and animated raindrop rings.
+        # road2.txr 9A2C159304E5A4D4 -> wet
+        over "mat_200A8142FA2B4839"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                asset inputs:reflectionroughness_texture = @./textures/wet_road_rough.dds@ (
+                    colorSpace = "raw"
+                )
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/wet_road_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+                int inputs:sprite_sheet_cols = 4
+                int inputs:sprite_sheet_rows = 4
+                int inputs:sprite_sheet_fps = 16
+            }
+        }
+        # road.txr 2D89EABEB66BE74A -> wet
+        over "mat_0D891D5E678659A5"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                asset inputs:reflectionroughness_texture = @./textures/wet_road_rough.dds@ (
+                    colorSpace = "raw"
+                )
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/wet_road_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+                int inputs:sprite_sheet_cols = 4
+                int inputs:sprite_sheet_rows = 4
+                int inputs:sprite_sheet_fps = 16
+            }
+        }
+        # store_b0.txr (cobblestones) 5FBCFC958E1DDF00 -> wet
+        over "mat_349C985752CCA1FC"
+        {
+            over "Shader"
+            {
+                uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
+                uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
+                asset inputs:reflectionroughness_texture = @./textures/wet_road_rough.dds@ (
+                    colorSpace = "raw"
+                )
+                float inputs:metallic_constant = 0.0
+                asset inputs:normalmap_texture = @./textures/wet_road_normal.dds@ (
+                    colorSpace = "raw"
+                )
+                int inputs:encoding = 2
+                int inputs:sprite_sheet_cols = 4
+                int inputs:sprite_sheet_rows = 4
+                int inputs:sprite_sheet_fps = 16
+            }
+        }
+
         # Vehicle atlases (30.10): body paint, glass and trim share one 256x256 texture. Roughness masks from
         # remix-mod/tools/gen_vehicle_masks.py (remix-mod/masks/<HASH>_rough.png, converted to DDS at bundle time):
         # glossy paint 0.18, glass 0.04, dark trim 0.55. Paint is dielectric (metallic 0).

@@ -1575,6 +1575,35 @@ VOID D2GI::DrawPrimitive(D3D7::D3DPRIMITIVETYPE pt, DWORD dwFVF, BOOL bStrided, 
 		}
 	}
 
+	// WetRoads: while it rains (the game draws its rain streaks or road splashes), draw the known road textures
+	// with a darkened copy. The copy has its own Remix content hash, which mod.usda gives a wet material (glossy,
+	// puddles, raindrop ripples). When the rain stops the roads stay wet for a while.
+	if (D2GIConfig::RemixWetRoadsEnabled() && !m_bInUntexturedFix && m_lpCurrentTextures[0] != nullptr)
+	{
+		D2GITexture* pTex = m_lpCurrentTextures[0];
+		if (TextureNameIs(pTex, "drop.txr") || TextureNameIs(pTex, "rain.txr"))
+			m_qwLastRainTick = GetTickCount64();
+		else if (m_qwLastRainTick != 0 && GetTickCount64() - m_qwLastRainTick < 60000 && pGlowSaved == nullptr &&
+			pTex->GetWidth() <= 256 && pTex->GetHeight() <= 256)
+		{
+			static const unsigned long long kRoads[] = {
+				0x9A2C159304E5A4D4ull, // road2.txr: main road with markings
+				0x2D89EABEB66BE74Aull, // road.txr: plain asphalt
+				0x5FBCFC958E1DDF00ull, // store_b0.txr: cobblestones
+			};
+			const unsigned long long h = CachedTextureHash(pTex);
+			if (std::find(std::begin(kRoads), std::end(kRoads), h) != std::end(kRoads))
+			{
+				D3D9::IDirect3DTexture9* pWet = GetWetTexture(pTex, h);
+				if (pWet != nullptr)
+				{
+					m_pDev->SetTexture(0, pWet);
+					glowRestore.t = pTex;
+				}
+			}
+		}
+	}
+
 	// Backdrop: the game first draws an untextured sky dome and a flat ground plane around the camera with
 	// z-write off. Under Remix they cover the world (sky) or lie over roads (khaki plane), and their
 	// UntexturedColors hash changes with weather and time of day. No other untextured 3D draw has z-write off.
@@ -3437,4 +3466,85 @@ unsigned long long D2GI::CachedTextureHash(D2GITexture* pTex)
 	}
 	m_TexHashCache[pTex] = h;
 	return h;
+}
+
+
+// A copy of a road texture with every channel at 3/4 (wet surfaces are darker). Only 16-bit 565 and 32-bit
+// formats; all mip levels are copied. Its top level hashes differently from the original, and mod.usda has a wet
+// material for that hash (computed offline the same way: see remix-mod/README.md).
+D3D9::IDirect3DTexture9* D2GI::GetWetTexture(D2GITexture* pSrc, unsigned long long qwHash)
+{
+	auto it = m_WetTextures.find(qwHash);
+	if (it != m_WetTextures.end())
+		return it->second.Get();
+	m_WetTextures[qwHash] = nullptr;
+	D3D9::IDirect3DTexture9* pSrcTex = pSrc->GetD3D9Texture();
+	if (pSrcTex == nullptr)
+		return nullptr;
+	D3D9::D3DSURFACE_DESC desc;
+	if (FAILED(pSrcTex->GetLevelDesc(0, &desc)))
+		return nullptr;
+	const bool b565 = desc.Format == D3D9::D3DFMT_R5G6B5;
+	const bool b8888 = desc.Format == D3D9::D3DFMT_X8R8G8B8 || desc.Format == D3D9::D3DFMT_A8R8G8B8;
+	if (!b565 && !b8888)
+	{
+		Logger::Log(TEXT("Remix: WetRoads: road texture %016llX has format %u, not handled"), qwHash, (unsigned)desc.Format);
+		return nullptr;
+	}
+	const DWORD dwLevels = pSrcTex->GetLevelCount();
+	Microsoft::WRL::ComPtr<D3D9::IDirect3DTexture9> pWet;
+	if (FAILED(m_pDev->CreateTexture(desc.Width, desc.Height, dwLevels, 0, desc.Format, D3D9::D3DPOOL_MANAGED, &pWet, nullptr)))
+		return nullptr;
+	for (DWORD lv = 0; lv < dwLevels; lv++)
+	{
+		D3D9::D3DSURFACE_DESC ld;
+		D3D9::D3DLOCKED_RECT s, d;
+		if (FAILED(pSrcTex->GetLevelDesc(lv, &ld)) || FAILED(pSrcTex->LockRect(lv, &s, nullptr, D3DLOCK_READONLY)))
+			return nullptr;
+		if (FAILED(pWet->LockRect(lv, &d, nullptr, 0)))
+		{
+			pSrcTex->UnlockRect(lv);
+			return nullptr;
+		}
+		for (UINT y = 0; y < ld.Height; y++)
+		{
+			const BYTE* sp = static_cast<const BYTE*>(s.pBits) + (size_t)y * s.Pitch;
+			BYTE* dp = static_cast<BYTE*>(d.pBits) + (size_t)y * d.Pitch;
+			for (UINT x = 0; x < ld.Width; x++)
+			{
+				if (b565)
+				{
+					const WORD v = reinterpret_cast<const WORD*>(sp)[x];
+					const WORD r = ((v >> 11) & 31) * 3 / 4, g = ((v >> 5) & 63) * 3 / 4, b = (v & 31) * 3 / 4;
+					reinterpret_cast<WORD*>(dp)[x] = (WORD)((r << 11) | (g << 5) | b);
+				}
+				else
+				{
+					const DWORD v = reinterpret_cast<const DWORD*>(sp)[x];
+					const DWORD r = ((v >> 16) & 255) * 3 / 4, g = ((v >> 8) & 255) * 3 / 4, b = (v & 255) * 3 / 4;
+					reinterpret_cast<DWORD*>(dp)[x] = (v & 0xFF000000) | (r << 16) | (g << 8) | b;
+				}
+			}
+		}
+		pWet->UnlockRect(lv);
+		pSrcTex->UnlockRect(lv);
+	}
+	m_WetTextures[qwHash] = pWet;
+	// Log the copy's content hash so mod.usda can be checked against it
+	D3D9::D3DLOCKED_RECT r;
+	unsigned long long wetHash = 0;
+	if (SUCCEEDED(pWet->LockRect(0, &r, nullptr, D3DLOCK_READONLY)))
+	{
+		const UINT bpp = b565 ? 2 : 4;
+		XXH3_state_t* st = XXH3_createState();
+		XXH3_64bits_reset(st);
+		for (UINT y = 0; y < desc.Height; y++)
+			XXH3_64bits_update(st, static_cast<const BYTE*>(r.pBits) + (size_t)y * r.Pitch, (size_t)desc.Width * bpp);
+		wetHash = XXH3_64bits_digest(st);
+		XXH3_freeState(st);
+		pWet->UnlockRect(0);
+	}
+	Logger::Log(TEXT("Remix: WetRoads: wet copy of %016llX is %016llX (%ux%u, %u levels)"), qwHash, wetHash,
+		(unsigned)desc.Width, (unsigned)desc.Height, (unsigned)dwLevels);
+	return pWet.Get();
 }

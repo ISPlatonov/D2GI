@@ -153,6 +153,10 @@ class D2GI
 	bool m_bGameDirLightDropped[64] = {};
 	bool m_bGameLightOn[64] = {};
 	std::unordered_map<const D2GITexture*, unsigned long long> m_TexHashCache;
+	// WetRoads: darkened copies of road textures (own content hash -> wet material in mod.usda), by source hash
+	std::unordered_map<unsigned long long, Microsoft::WRL::ComPtr<D3D9::IDirect3DTexture9>> m_WetTextures;
+	ULONGLONG m_qwLastRainTick = 0;
+	D3D9::IDirect3DTexture9* GetWetTexture(D2GITexture* pSrc, unsigned long long qwHash);
 	// Vehicles found in the game's heap (see UpdateVehicleList); lamp positions in vehicle coordinates
 	// (x right, y forward, z up), learned from their lg_head glow quads
 	struct TrackedVehicle { DWORD ptr; DWORD vt; FLOAT M[12]; FLOAT lamp[2][3]; int samples[2]; int misses; };
