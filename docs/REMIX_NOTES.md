@@ -70,3 +70,9 @@ Remix colors an effect light (texture in `rtx.lightConverter`, here `lg_head.txr
 diffuse, times `rtx.effectLightColor` (`rtx_scene_manager.cpp`, `createEffectLight`). The game does not set a
 material for glow sprites, so they inherit the previous draw's: the owner saw purple light on a trailer at night.
 `GlowLightColor = 1` sets a fixed warm white material for lg_head draws.
+
+## Low sun (31.10)
+
+Owner: sand slopes facing a low sun looked white. With SunFollowsTime the sun near the horizon still had noon
+intensity, so surfaces facing it got full light. The sun is now dimmed and warmed by elevation:
+intensity x (0.3 + 0.7 f), green x (0.8 + 0.2 f), blue x (0.55 + 0.45 f), f = sin(elevation) / sin(60 degrees).

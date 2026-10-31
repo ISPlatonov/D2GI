@@ -2710,6 +2710,14 @@ VOID D2GI::SetRemixSun()
 		dx = (float)(-std::cos(az) * std::cos(el));
 		dy = (float)(std::sin(az) * std::cos(el));
 		dz = (float)(-std::sin(el));
+		// A low sun shines through more air: dimmer and warmer. Without this, slopes facing a sun near the horizon
+		// got full noon light and looked white (owner, 31.10). f = 1 at 60 degrees, ~0.16 at 8 degrees.
+		const float f = (float)(std::sin(el) / std::sin(60.0 * kPi / 180.0));
+		const float att = 0.3f + 0.7f * f;
+		sun.Diffuse.r *= att;
+		sun.Diffuse.g *= att * (0.8f + 0.2f * f);
+		sun.Diffuse.b *= att * (0.55f + 0.45f * f);
+		sun.Specular = sun.Diffuse;
 		static int s_nLastHour = -1;
 		if ((int)hour != s_nLastHour)
 		{
