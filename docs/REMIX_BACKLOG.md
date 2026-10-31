@@ -63,6 +63,7 @@ The owner wants the world drawn much farther (also needed so off-screen geometry
 
 ## Done
 - #4 HUD flicker, #5 managed-pool textures, #16 SkipBackdrop, #17 frame-order dump, #18 smoke/dust as particles, #22–#26 lighting (all merged).
+- Workshop item 3828304518 updated to `pr-37 3300866` by Claude (31.10 11:17; water, waterfall, moving sun, vehicle paint, glow light color, new preview: the same start-view frame re-shot on this build; 11:48 replaced by the night version at 23:00, which the owner preferred). The first two submits failed with Steam code 2; the third went through.
 - Workshop item 3828304518 updated to `pr-30 bba1e0b` by Claude (29.10 00:49, headlights, draw distance x3, materials).
 - Workshop item 3828304518 updated to `pr-18 cc5d082` by Claude (27.10 18:22), change note in Russian.
 - #13 `DebugDraws` log shows the Remix hash, vertex alpha, blend state and positions for each draw (hashes match rtx.conf entries).
