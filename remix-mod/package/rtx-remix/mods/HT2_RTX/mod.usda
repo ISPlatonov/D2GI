@@ -1060,28 +1060,20 @@ over "RootNode"
             {
                 uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
                 uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
-                float inputs:reflection_roughness_constant = 0.18
+                float inputs:reflection_roughness_constant = 0.25
                 float inputs:metallic_constant = 0.0
             }
         }
-        # road.txr 2D89EABEB66BE74A -> wet
+        # road.txr 2D89EABEB66BE74A -> wet. Also no normal map: where this texture is stretched (gas station apron)
+        # the raindrop rings looked like waves of liquid metal (owner, 31.10). Damp asphalt with a little sheen.
         over "mat_0D891D5E678659A5"
         {
             over "Shader"
             {
                 uniform asset info:mdl:sourceAsset = @AperturePBR_Opacity.mdl@
                 uniform token info:mdl:sourceAsset:subIdentifier = "AperturePBR_Opacity"
-                asset inputs:reflectionroughness_texture = @./textures/wet_road_rough.dds@ (
-                    colorSpace = "raw"
-                )
+                float inputs:reflection_roughness_constant = 0.25
                 float inputs:metallic_constant = 0.0
-                asset inputs:normalmap_texture = @./textures/wet_road_normal.dds@ (
-                    colorSpace = "raw"
-                )
-                int inputs:encoding = 2
-                int inputs:sprite_sheet_cols = 4
-                int inputs:sprite_sheet_rows = 4
-                int inputs:sprite_sheet_fps = 16
             }
         }
 
