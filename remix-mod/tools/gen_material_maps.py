@@ -61,6 +61,28 @@ def water():
     return to_normal(ripples * 0.8 + swell * 0.2, 6.0)
 
 
+def water_flow():
+    """Animated ripples: a 4x4 sprite sheet of 256x256 frames (Remix plays it with sprite_sheet_*).
+    Two periodic layers roll along V (one 1 period per loop, one 2 periods and a little sideways), so the
+    loop is seamless and the surface looks like it flows."""
+    global N
+    n_old, N = N, 256
+    try:
+        a = periodic_noise(41, 1.2, aniso=(0.5, 1.0), lo=4, hi=30)
+        b = periodic_noise(42, 1.0, aniso=(0.7, 1.0), lo=8, hi=50)
+        swell = periodic_noise(43, 2.2, lo=1, hi=4)
+        frames = 16
+        sheet = Image.new("RGBA", (4 * N, 4 * N))
+        for f in range(frames):
+            sa = (f * N) // frames
+            sb = (2 * f * N) // frames
+            h = np.roll(a, sa, 0) * 0.55 + np.roll(np.roll(b, sb, 0), sa // 4, 1) * 0.3 + np.roll(swell, sa, 0) * 0.15
+            sheet.paste(to_normal(h, 5.0), ((f % 4) * N, (f // 4) * N))
+        return sheet
+    finally:
+        N = n_old
+
+
 def water_color():
     # Real water is dark; what you see is mostly reflection. Deep green-blue, 4x4 constant (the game's turquoise
     # texture made rivers look like a pool).
@@ -73,7 +95,7 @@ def main():
     out = sys.argv[1]
     prev = sys.argv[2] if len(sys.argv) > 2 else None
     os.makedirs(out, exist_ok=True)
-    for name, fn in (("grass_normal", grass), ("asphalt_normal", asphalt), ("water_normal", water),
+    for name, fn in (("grass_normal", grass), ("asphalt_normal", asphalt), ("water_normal", water), ("water_flow", water_flow),
                      ("water_color", water_color)):
         img = fn()
         img.save(os.path.join(out, name + ".dds"))

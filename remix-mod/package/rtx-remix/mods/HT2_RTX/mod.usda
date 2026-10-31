@@ -701,6 +701,7 @@ over "RootNode"
 
         # River water (31.10, capture 2026-10-31_09-21-40; two 128x128 turquoise textures, one with alpha 229).
         # Opaque, dark and glossy with a ripple normal map: the look comes from reflecting sky and banks.
+        # The ripples flow: 16-frame normal sprite sheet (water_flow.dds), 2 s seamless loop, rolling along V.
         over "mat_744903AE826F5756"
         {
             over "Shader"
@@ -712,10 +713,13 @@ over "RootNode"
                 )
                 float inputs:reflection_roughness_constant = 0.03
                 float inputs:metallic_constant = 0.0
-                asset inputs:normalmap_texture = @./textures/water_normal.dds@ (
+                asset inputs:normalmap_texture = @./textures/water_flow.dds@ (
                     colorSpace = "raw"
                 )
                 int inputs:encoding = 2
+                int inputs:sprite_sheet_cols = 4
+                int inputs:sprite_sheet_rows = 4
+                int inputs:sprite_sheet_fps = 8
             }
         }
         over "mat_EA5EED7C9119926C"
@@ -729,10 +733,13 @@ over "RootNode"
                 )
                 float inputs:reflection_roughness_constant = 0.03
                 float inputs:metallic_constant = 0.0
-                asset inputs:normalmap_texture = @./textures/water_normal.dds@ (
+                asset inputs:normalmap_texture = @./textures/water_flow.dds@ (
                     colorSpace = "raw"
                 )
                 int inputs:encoding = 2
+                int inputs:sprite_sheet_cols = 4
+                int inputs:sprite_sheet_rows = 4
+                int inputs:sprite_sheet_fps = 8
             }
         }
         # river banks (stone and gravel slopes, 128x128) and bushes (64x64, alpha-tested)
