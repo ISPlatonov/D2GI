@@ -156,6 +156,9 @@ class D2GI
 	// WetRoads: darkened copies of road textures (own content hash -> wet material in mod.usda), by source hash
 	std::unordered_map<unsigned long long, Microsoft::WRL::ComPtr<D3D9::IDirect3DTexture9>> m_WetTextures;
 	ULONGLONG m_qwLastRainTick = 0;
+	// WorldFogOnly: a fog start held until its end shows whether it is the world range
+	DWORD m_dwPendingFogStart = 0;
+	bool m_bShortFogPending = false;
 	D3D9::IDirect3DTexture9* GetWetTexture(D2GITexture* pSrc, unsigned long long qwHash);
 	// Vehicles found in the game's heap (see UpdateVehicleList); lamp positions in vehicle coordinates
 	// (x right, y forward, z up), learned from their lg_head glow quads

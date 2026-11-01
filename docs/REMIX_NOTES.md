@@ -76,3 +76,10 @@ material for glow sprites, so they inherit the previous draw's: the owner saw pu
 Owner: sand slopes facing a low sun looked white. With SunFollowsTime the sun near the horizon still had noon
 intensity, so surfaces facing it got full light. The sun is now dimmed and warmed by elevation:
 intensity x (0.3 + 0.7 f), green x (0.8 + 0.2 f), blue x (0.55 + 0.45 f), f = sin(elevation) / sin(60 degrees).
+
+## Fog ranges and volumetric haze (01.11)
+
+The game sets two fog ranges every frame: the world range (clear day with DrawDistance x3: start ~600, end 2700)
+and a short one for near draws (start 40, end 180). With `rtx.volumetrics.enableFogRemap` Remix used the short one
+and a clear day turned into thick fog. `WorldFogOnly = 1` passes only ranges ending past 300 units. Remix compares
+the fog end in game units with `fogRemapMaxDistance*Meters` x 100 (it ignores scene scale there).
