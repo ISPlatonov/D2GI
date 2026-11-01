@@ -743,14 +743,28 @@ VOID D2GI::OnRenderStateSet(D3D7::D3DRENDERSTATETYPE eState, DWORD dwValue)
 			m_pDev->SetRenderState(D3D9::D3DRS_FOGCOLOR, dwValue);
 			break;
 		case D3D7::D3DRENDERSTATE_FOGVERTEXMODE:
-			m_pDev->SetRenderState(D3D9::D3DRS_FOGVERTEXMODE, dwValue);
-			break;
+		case D3D7::D3DRENDERSTATE_FOGTABLEMODE:
 		case D3D7::D3DRENDERSTATE_FOGSTART:
-			m_pDev->SetRenderState(D3D9::D3DRS_FOGSTART, dwValue);
-			break;
 		case D3D7::D3DRENDERSTATE_FOGEND:
-			m_pDev->SetRenderState(D3D9::D3DRS_FOGEND, dwValue);
+		{
+			// Remix turns the fog state into volumetric haze (rtx.volumetrics.enableFogRemap), so log what the game sets.
+			static int s_nFogLogged = 0;
+			static DWORD s_dwLast[4] = { 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF };
+			const int k = eState == D3D7::D3DRENDERSTATE_FOGVERTEXMODE ? 0 : eState == D3D7::D3DRENDERSTATE_FOGTABLEMODE ? 1 :
+				eState == D3D7::D3DRENDERSTATE_FOGSTART ? 2 : 3;
+			if (s_dwLast[k] != dwValue && s_nFogLogged < 60)
+			{
+				s_dwLast[k] = dwValue;
+				s_nFogLogged++;
+				float f = 0.0f;
+				CopyMemory(&f, &dwValue, 4);
+				Logger::Log(TEXT("Remix fog state %s = %u (%.2f)"), k == 0 ? TEXT("vertexmode") : k == 1 ? TEXT("tablemode") :
+					k == 2 ? TEXT("start") : TEXT("end"), (unsigned)dwValue, f);
+			}
+			m_pDev->SetRenderState(k == 0 ? D3D9::D3DRS_FOGVERTEXMODE : k == 1 ? D3D9::D3DRS_FOGTABLEMODE :
+				k == 2 ? D3D9::D3DRS_FOGSTART : D3D9::D3DRS_FOGEND, dwValue);
 			break;
+		}
 		case D3D7::D3DRENDERSTATE_AMBIENT:
 			if (D2GIConfig::RemixDebugDrawsEnabled())
 			{
