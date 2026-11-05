@@ -110,6 +110,41 @@ def waterfall():
         N = n_old
 
 
+def wet_road():
+    """Wet road: 4x4 sprite sheets of 128x128 frames, 16 frames at 16 fps (1 s loop), in the road texture's UV.
+    Uniformly wet asphalt (roughness 0.14) with its grain and many small, short-lived raindrop rings spread at
+    random, so nothing reads as a pattern. 31.10: puddles from a mask repeated with every road tile and the owner
+    found the identical puddles monotonous; puddles would need world-space placement, which this cannot do."""
+    global N
+    n_old, N = N, 128
+    try:
+        rng = np.random.default_rng(71)
+        grain = periodic_noise(63, 0.4, lo=20, hi=60)
+        rough = np.full((N, N), 0.14, np.float32)
+        frames, cols = 16, 4
+        drops = [(rng.uniform(0, N), rng.uniform(0, N), int(rng.integers(0, frames))) for _ in range(160)]
+        yy, xx = np.mgrid[0:N, 0:N].astype(np.float32)
+        rs = Image.new("RGBA", (cols * N, cols * N))
+        ns = Image.new("RGBA", (cols * N, cols * N))
+        rimg = Image.fromarray((np.dstack([rough] * 3 + [np.ones_like(rough)]) * 255 + 0.5).astype(np.uint8), "RGBA")
+        for f in range(frames):
+            h = grain * 0.5
+            for (x, y, f0) in drops:
+                age = (f - f0) % frames
+                if age > 4:
+                    continue
+                radius = 0.8 + age * 0.9
+                dx = (xx - x + N / 2) % N - N / 2
+                dy = (yy - y + N / 2) % N - N / 2
+                dist = np.sqrt(dx * dx + dy * dy)
+                h = h + np.exp(-((dist - radius) / 0.6) ** 2) * (1 - age / 5.0) * 0.35
+            ns.paste(to_normal(h, 3.0), ((f % cols) * N, (f // cols) * N))
+            rs.paste(rimg, ((f % cols) * N, (f // cols) * N))
+        return rs, ns
+    finally:
+        N = n_old
+
+
 def water_color():
     # Real water is dark; what you see is mostly reflection. Deep green-blue, 4x4 constant (the game's turquoise
     # texture made rivers look like a pool).
@@ -130,6 +165,12 @@ def main():
             os.makedirs(prev, exist_ok=True)
             img.convert("RGB").save(os.path.join(prev, name + ".png"))
         print(name, img.size)
+    rs, ns = wet_road()
+    rs.save(os.path.join(out, "wet_road_rough.dds"))
+    ns.save(os.path.join(out, "wet_road_normal.dds"))
+    if prev:
+        ns.convert("RGB").save(os.path.join(prev, "wet_road_normal.png"))
+        rs.convert("RGB").save(os.path.join(prev, "wet_road_rough.png"))
     col, nrm = waterfall()
     col.save(os.path.join(out, "waterfall_color.dds"))
     nrm.save(os.path.join(out, "waterfall_normal.dds"))

@@ -52,6 +52,7 @@ class D2GIConfig
 	static bool       s_bRemixSunFollowsTime;
 	static bool       s_bRemixGlowLightColor;
 	static bool       s_bRemixNightBackdrops;
+	static bool       s_bRemixWetRoads;
 public:
 	static HookOptions ReadFromFile();
 
@@ -81,6 +82,7 @@ public:
 	static bool RemixSunFollowsTimeEnabled() { return s_bRemixSunFollowsTime; }
 	static bool RemixGlowLightColorEnabled() { return s_bRemixGlowLightColor; }
 	static bool RemixNightBackdropsEnabled() { return s_bRemixNightBackdrops; }
+	static bool RemixWetRoadsEnabled() { return s_bRemixWetRoads; }
 
 	static std::basic_string<TCHAR> GetConfigFilePath();
 };
