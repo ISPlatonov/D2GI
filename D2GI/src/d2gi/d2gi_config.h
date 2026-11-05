@@ -53,6 +53,7 @@ class D2GIConfig
 	static bool       s_bRemixGlowLightColor;
 	static bool       s_bRemixNightBackdrops;
 	static bool       s_bRemixWetRoads;
+	static bool       s_bRemixWorldFogOnly;
 public:
 	static HookOptions ReadFromFile();
 
@@ -83,6 +84,7 @@ public:
 	static bool RemixGlowLightColorEnabled() { return s_bRemixGlowLightColor; }
 	static bool RemixNightBackdropsEnabled() { return s_bRemixNightBackdrops; }
 	static bool RemixWetRoadsEnabled() { return s_bRemixWetRoads; }
+	static bool RemixWorldFogOnlyEnabled() { return s_bRemixWorldFogOnly; }
 
 	static std::basic_string<TCHAR> GetConfigFilePath();
 };

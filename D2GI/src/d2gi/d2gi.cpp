@@ -746,11 +746,38 @@ VOID D2GI::OnRenderStateSet(D3D7::D3DRENDERSTATETYPE eState, DWORD dwValue)
 			m_pDev->SetRenderState(D3D9::D3DRS_FOGVERTEXMODE, dwValue);
 			break;
 		case D3D7::D3DRENDERSTATE_FOGSTART:
-			m_pDev->SetRenderState(D3D9::D3DRS_FOGSTART, dwValue);
-			break;
 		case D3D7::D3DRENDERSTATE_FOGEND:
-			m_pDev->SetRenderState(D3D9::D3DRS_FOGEND, dwValue);
+		{
+			// WorldFogOnly: Remix makes volumetric haze from the fog range (rtx.volumetrics.enableFogRemap). Each frame the
+			// game sets the world range (e.g. 600..2700) and a short one (40..180) for near draws, and the short one
+			// turned a clear day into thick fog. Pass only ranges that end past 300 units.
+			const bool bEnd = eState == D3D7::D3DRENDERSTATE_FOGEND;
+			float f = 0.0f;
+			CopyMemory(&f, &dwValue, 4);
+			if (D2GIConfig::RemixWorldFogOnlyEnabled())
+			{
+				if (bEnd)
+				{
+					if (f < 300.0f)
+					{
+						m_bShortFogPending = true;
+						break;
+					}
+					m_bShortFogPending = false;
+					if (m_dwPendingFogStart != 0)
+						m_pDev->SetRenderState(D3D9::D3DRS_FOGSTART, m_dwPendingFogStart);
+					m_dwPendingFogStart = 0;
+				}
+				else
+				{
+					// The start comes before its end: hold it until the end shows which range it belongs to.
+					m_dwPendingFogStart = dwValue;
+					break;
+				}
+			}
+			m_pDev->SetRenderState(bEnd ? D3D9::D3DRS_FOGEND : D3D9::D3DRS_FOGSTART, dwValue);
 			break;
+		}
 		case D3D7::D3DRENDERSTATE_AMBIENT:
 			if (D2GIConfig::RemixDebugDrawsEnabled())
 			{

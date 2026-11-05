@@ -76,3 +76,18 @@ material for glow sprites, so they inherit the previous draw's: the owner saw pu
 Owner: sand slopes facing a low sun looked white. With SunFollowsTime the sun near the horizon still had noon
 intensity, so surfaces facing it got full light. The sun is now dimmed and warmed by elevation:
 intensity x (0.3 + 0.7 f), green x (0.8 + 0.2 f), blue x (0.55 + 0.45 f), f = sin(elevation) / sin(60 degrees).
+
+## Fog ranges and volumetric haze (01.11)
+
+The game sets two fog ranges every frame: the world range (clear day with DrawDistance x3: start ~600, end 2700)
+and a short one for near draws (start 40, end 180). With `rtx.volumetrics.enableFogRemap` Remix used the short one
+and a clear day turned into thick fog. `WorldFogOnly = 1` passes only ranges ending past 300 units. Remix compares
+the fog end in game units with `fogRemapMaxDistance*Meters` x 100 (it ignores scene scale there).
+
+### Volumetric haze did not work (01.11)
+
+Any `rtx.volumetrics` fog denser than the default (tested: 0.62 transmittance over 30 "meters" = 3000 units,
+with and without fog remap, with and without `enableAtmosphere` at 5 m height) turns the sky black and removes
+the sun light at 10:00 on a clear day: the whole scene looks like night. Defaults (0.999 over 200 m) are fine.
+Likely the rasterized sky and the distant sun are attenuated as if infinitely far inside the fog. Not solved;
+the haze settings were removed from rtx.conf, color grading kept.
